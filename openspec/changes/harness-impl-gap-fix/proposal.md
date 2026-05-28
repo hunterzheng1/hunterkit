@@ -69,14 +69,14 @@ test-strategy: "tdd"
 ### 3.2 修改能力
 
 - `harness-cli-entrypoint`：实现交互式向导（6 步问题）、已初始化项目无参数运行进入操作菜单、命令级参数解析框架（含各命令 `--json` 格式化输出）、初始化时生成 AGENTS.md/CLAUDE.md/Skill 投影
-- `harness-workspace-config`：补全 `.harness/docs/`、`.harness/rules/`、`.harness/events/`、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录创建；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置文件；确保 `harness.config.json` 包含 `documents.generatedBlockPrefix` 等完整字段
-- `harness-adapter-skill-runtime`：完善 Claude/Codex 投影内容（frontmatter、references/scripts/assets）、实现 Copilot/Cursor adapter、实现 `--repair-adapters`；生成 `.agents/skills/harness/agents/openai.yaml`（Codex agent 定义）；生成 `.github/copilot-instructions.md`（Copilot 指令）
+- `harness-workspace-config`：补全 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录创建；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置文件；确保 `harness.config.json` 包含 `documents.generatedBlockPrefix`、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）等完整字段
+- `harness-adapter-skill-runtime`：完善 Claude/Codex 投影内容（frontmatter、references/scripts/assets）、实现 Copilot/Cursor adapter、实现 `--repair-adapters`；Skill 源文件写入 `.harness/adapters/shared/skills/harness/`（含 `references/`、`scripts/`、`assets/` 子目录）；生成 `.agents/skills/harness/agents/openai.yaml`（Codex agent 定义）；生成 `.github/copilot-instructions.md`（Copilot 指令）
 - `harness-inspect`：实现 `--full` 全量扫描、`--path` 限定扫描、`--rules` 条件生成、facts 大小控制
-- `harness-sync`：实现 `--check` 漂移检测、`--fast` 快速判断、`--docs` 文档限定、`REVIEW_REQUIRED` 标注；高风险变更自动从 `--fast` 升级为完整检查；报告写入 `.harness/reports/sync/*.md`
-- `harness-develop`：实现 spec/design/tasks/check/apply/archive 多阶段支持；实现默认自动阶段检测（检测已有阶段→询问下一步→自动进入缺失阶段）；`--from` 从需求文档生成、`--parallel` 并行、`--capability` 限定单能力域、`--no-parallel` 强制串行；阶段文件写入 `.harness/develop/changes/<change>/` canonical storage 路径；兼容读取旧 `openspec/changes/**`；design 阶段读取 repo facts；apply 阶段按任务 DAG 并行执行无依赖任务
-- `harness-review`：实现 `--local`/`--staged`/`--scan` 范围参数、`--full` 强制满 agent、`--lite` 轻量检查、`--comment` MR/PR 评论、`--fix`/`--no-fix`、JSON 报告输出、P0/P1/P2 严重度分级；实现交互式范围选择；实现 6 个并行 review agent + N 个 finding validator（对每条 finding 独立复核）；实现置信度过滤（confidence < 80 丢弃）和去重；报告写入 `.harness/reports/review/<timestamp>-<branch>.md/.json`
+- `harness-sync`：实现 `--check` 漂移检测、`--fast` 快速判断、`--docs` 文档限定、`REVIEW_REQUIRED` 标注；默认只更新 generated block 或用户确认区域，不触碰非托管用户内容；高风险变更自动从 `--fast` 升级为完整检查；报告写入 `.harness/reports/sync/*.md`
+- `harness-develop`：实现 propose/spec/design/tasks/check/apply/archive 多阶段支持（含 `--propose` 参数）；实现默认自动阶段检测（检测已有阶段→询问下一步→自动进入缺失阶段）；`--from` 从需求文档生成、`--parallel` 并行（控制 design 多 capability 并发生成和 apply 按任务 DAG 并行执行无依赖任务，共享文件修改必须串行）、`--capability` 限定单能力域、`--no-parallel` 强制串行；阶段文件写入 `.harness/develop/changes/<change>/` canonical storage 路径；兼容读取旧 `openspec/changes/**`；design 阶段读取 repo facts
+- `harness-review`：实现 `--local`/`--staged`/`--scan` 范围参数、`--full` 强制满 agent、`--lite` 轻量检查、`--comment` MR/PR 评论、`--fix`/`--no-fix`、JSON 报告输出、P0/P1/P2 严重度分级；实现交互式范围选择；编排器本身不做实质审查，实现 6 个并行 review agent + N 个 finding validator（对每条 finding 独立复核，review agent 必须读完整相关源码而非仅看 diff）；实现置信度过滤（confidence < 80 丢弃）和去重；报告写入 `.harness/reports/review/<timestamp>-<branch>.md/.json`；用户可见内容使用简体中文
 - `harness-knowledge`：迁移到 SQLite FTS5、实现 `--index` 索引构建/刷新（索引 openspec archive、ADR、rules、reports）、实现 `--search` 搜索、搜索结果带 source path/snippet/score、增量索引
-- `harness-safety-orchestration`：实现 5 个 Hook 脚本生成（含 Hook 配置文件 Claude `settings.json`、Codex `hooks.json`）；Subagent 定义文件生成（需求分析 4 个、设计 4 个、代码生成 4 个、review 7 个）；dangerous-command 阻断集成到 CLI 流程（在 `src/cli/main.ts` 命令执行前拦截危险命令）；阻断列表包含 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
+- `harness-safety-orchestration`：实现 5 个 Hook 脚本生成（含 Hook 配置文件 Claude `settings.json`、Codex `hooks.json`），Hook 实现遵循四条原则（不做复杂 AI 判断、输出必须结构化、不直接修代码、只调用 `harness` CLI 或小脚本）；Subagent 定义文件生成（需求分析 4 个、设计 4 个、代码生成 4 个、review 7 个）；dangerous-command 阻断集成到 CLI 流程（在 `src/cli/main.ts` 命令执行前拦截危险命令）；阻断列表包含 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
 
 ---
 
@@ -87,17 +87,20 @@ test-strategy: "tdd"
 - [ ] `src/cli/interactive.ts`：实现 `runInitWizard()` 6 步问题、`runOperationMenu()` 可选择执行
 - [ ] `src/cli/global-options.ts`：扩展为支持命令级参数解析框架（含各命令 `--json` 格式化输出）
 - [ ] `src/cli/main.ts`：初始化时调用文档生成和 Skill 投影安装；集成 dangerous-command 阻断拦截点
-- [ ] `src/core/workspace.ts`：补全 `.harness/docs/`、`.harness/rules/`、`.harness/events/`、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录
+- [ ] `src/core/workspace.ts`：补全 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录
 - [ ] `src/core/paths.ts`：确保 develop canonical storage 路径 `.harness/develop/changes/<change>/` 正确定义
-- [ ] `src/core/config-schema.ts`：确保 `harness.config.json` 包含 `documents.generatedBlockPrefix` 等完整字段；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置 schema
+- [ ] `src/core/config-schema.ts`：确保 `harness.config.json` 包含 `documents.generatedBlockPrefix`、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）等完整字段；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置 schema
 - [ ] `src/adapters/projection-renderer.ts`：完善 Claude/Codex 投影内容（frontmatter）
 - [ ] `src/adapters/registry.ts`：添加 Copilot/Cursor adapter 定义
 - [ ] `src/adapters/projection-writer.ts`：生成 `.agents/skills/harness/agents/openai.yaml`（Codex agent 定义）；生成 `.github/copilot-instructions.md`（Copilot 指令）
+- [ ] `src/adapters/source-manager.ts`：管理 `.harness/adapters/shared/skills/harness/` 下的源模板（references/scripts/assets），确保 `--repair-adapters` 可从中重新生成投影
+- [ ] `src/adapters/drift-detector.ts`：补全 `--check` 漂移检测逻辑，支持高风险变更自动从 `--fast` 升级为完整检查
+- [ ] `src/core/legacy-sources.ts`：补全兼容读取旧目录（`.docsync/`、`openspec/changes/**`、`.kld-review/`、`skywalk-sdd/`）逻辑，供 develop/sync/knowledge 等命令复用
 - [ ] `src/commands/config.ts`：实现 `--repair-adapters`；逐一实现 `--migrate-docsync`、`--migrate-sdd`、`--migrate-review`、`--migrate-docs` 四个迁移参数，消除硬编码
 - [ ] `src/capabilities/inspect/command.ts`：实现 `--full`、`--path`、`--rules` 参数解析
 - [ ] `src/capabilities/sync/command.ts`：实现 `--check`、`--fast`、`--docs` 参数解析和漂移检测逻辑；高风险变更自动从 `--fast` 升级为完整检查；报告写入 `.harness/reports/sync/*.md`
-- [ ] `src/capabilities/develop/command.ts`：实现 spec/design/tasks/check/apply/archive 多阶段；实现默认自动阶段检测；实现 `--capability`、`--no-parallel` 参数；阶段文件写入 `.harness/develop/changes/` canonical storage；兼容读取旧 `openspec/changes/**`；design 阶段读取 repo facts；apply 阶段按任务 DAG 并行执行无依赖任务
-- [ ] `src/capabilities/review/command.ts`：实现 `--local`/`--staged`/`--scan` 范围参数、`--full`、`--lite`、`--comment`、JSON 报告、严重度分级；实现交互式范围选择；实现置信度过滤（confidence < 80 丢弃）和去重；报告写入 `.harness/reports/review/<timestamp>-<branch>.md/.json`
+- [ ] `src/capabilities/develop/command.ts`：实现 propose/spec/design/tasks/check/apply/archive 多阶段（含 `--propose` 参数）；实现默认自动阶段检测；实现 `--capability`、`--no-parallel` 参数；阶段文件写入 `.harness/develop/changes/` canonical storage；兼容读取旧 `openspec/changes/**`；design 阶段读取 repo facts；apply 阶段按任务 DAG 并行执行无依赖任务，共享文件修改必须串行
+- [ ] `src/capabilities/review/command.ts`：实现 `--local`/`--staged`/`--scan` 范围参数、`--full`、`--lite`、`--comment`、`--fix`/`--no-fix`、JSON 报告、严重度分级；实现交互式范围选择；编排器本身不做实质审查；实现置信度过滤（confidence < 80 丢弃）和去重；报告写入 `.harness/reports/review/<timestamp>-<branch>.md/.json`；用户可见内容使用简体中文
 - [ ] `src/capabilities/knowledge/command.ts`：迁移到 SQLite FTS5、实现 `--index` 索引构建/刷新、实现 `--search`
 - [ ] `src/capabilities/safety/command.ts`：实现 Hook 脚本生成（含 `settings.json`/`hooks.json` 配置文件）、Subagent 定义文件生成（需求分析 4 个、设计 4 个、代码生成 4 个、review 7 个）；阻断列表包含 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
 - [ ] `test/cli/interactive.test.ts`：新增向导测试
