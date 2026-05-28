@@ -1,0 +1,55 @@
+{
+  "change": "personal-dev-tool-harness",
+  "archived_at": "2026-05-28T19:57:32.906Z",
+  "reason": "变更已完成实施",
+  "method": "skywalk-full-spec-archive",
+  "source_path": "openspec/changes/personal-dev-tool-harness",
+  "archive_path": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness",
+  "copied_specs": [
+    {
+      "capability": "harness-adapter-skill-runtime",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-adapter-skill-runtime/spec.md",
+      "target": "openspec/specs/harness-adapter-skill-runtime/spec.md"
+    },
+    {
+      "capability": "harness-cli-entrypoint",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-cli-entrypoint/spec.md",
+      "target": "openspec/specs/harness-cli-entrypoint/spec.md"
+    },
+    {
+      "capability": "harness-develop",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-develop/spec.md",
+      "target": "openspec/specs/harness-develop/spec.md"
+    },
+    {
+      "capability": "harness-inspect",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-inspect/spec.md",
+      "target": "openspec/specs/harness-inspect/spec.md"
+    },
+    {
+      "capability": "harness-knowledge",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-knowledge/spec.md",
+      "target": "openspec/specs/harness-knowledge/spec.md"
+    },
+    {
+      "capability": "harness-review",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-review/spec.md",
+      "target": "openspec/specs/harness-review/spec.md"
+    },
+    {
+      "capability": "harness-safety-orchestration",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-safety-orchestration/spec.md",
+      "target": "openspec/specs/harness-safety-orchestration/spec.md"
+    },
+    {
+      "capability": "harness-sync",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-sync/spec.md",
+      "target": "openspec/specs/harness-sync/spec.md"
+    },
+    {
+      "capability": "harness-workspace-config",
+      "source": "openspec/changes/archive/2026-05-28-personal-dev-tool-harness/specs/harness-workspace-config/spec.md",
+      "target": "openspec/specs/harness-workspace-config/spec.md"
+    }
+  ]
+}
