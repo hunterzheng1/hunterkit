@@ -43,12 +43,15 @@
 
 ### 2.1 统一返回体
 
+> **CLI 出口扩展说明**：`harness-cli-entrypoint` 作为统一 CLI 出口层，可在基础三体结构上扩展 `warnings`（string[]，非阻断问题列表）和 `artifacts`（CliArtifact[]，产物路径列表）字段。其他 Capability 均使用标准三体结构，不直接扩展顶层字段。
+
 **成功响应**：
 ```json
 {
   "code": 0,
   "msg": "success",
-  "data": { /* 业务数据 */ }
+  "data": { /* 业务数据 */ },
+  "warnings": []
 }
 ```
 
@@ -57,7 +60,8 @@
 {
   "code": -1,
   "msg": "错误描述",
-  "data": null
+  "data": null,
+  "warnings": []
 }
 ```
 
