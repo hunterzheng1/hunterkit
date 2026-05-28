@@ -15,6 +15,7 @@ skywalk-sdd/state/
 # 忽略的目录
 .agents/
 .claude/
+.codex/
 .docsync/
 openspec-templates/
 requirements/
