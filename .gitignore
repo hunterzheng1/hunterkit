@@ -1,0 +1,21 @@
+# KLD SDD AI 编辑器个人配置（请勿提交）
+.cursor/commands/personal-*
+.claude/commands/personal-*
+.codebuddy/commands/personal-*
+.qoder/commands/personal-*
+.kunlunzhima/commands/personal-*
+.workbuddy/commands/personal-*
+.agents/commands/personal-*
+
+# SDD Telemetry 数据（本地度量，可选提交）
+skywalk-sdd/events/
+skywalk-sdd/reports/
+skywalk-sdd/state/
+
+# 忽略的目录
+.agents/
+.claude/
+.docsync/
+openspec-templates/
+requirements/
+skywalk-sdd/
