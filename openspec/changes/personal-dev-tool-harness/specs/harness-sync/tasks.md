@@ -123,7 +123,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 sync 模块共享的 TypeScript 类型。
@@ -146,9 +146,9 @@
 9. 定义 `ReviewRequiredMarker`：`{ field, reason, targetDocument }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `SyncDocumentResult.status` 包含 5 个枚举值
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `SyncDocumentResult.status` 包含 5 个枚举值
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -160,7 +160,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `createDocumentRegistry()` 函数，注册 readme/agents/claude/copilot 文档目标和模板策略。
@@ -183,9 +183,9 @@
 8. 提供 `getDocumentRule(kind)`、`listDocumentRules()`、`filter(docs)` 方法
 
 #### 验收标准
-- [ ] 注册表包含 4 个文档规则
-- [ ] `filter(["readme", "agents"])` 返回 2 个规则
-- [ ] `npx tsc --noEmit` 通过
+- [x] 注册表包含 4 个文档规则
+- [x] `filter(["readme", "agents"])` 返回 2 个规则
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§1 场景（同步默认文档、限定同步文档）
@@ -197,7 +197,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-SY-01, TASK-SY-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 sync 模块完整单元测试骨架（红灯状态）。
@@ -242,10 +242,10 @@
 11. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.1 核心流程所有分支
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.1 核心流程所有分支
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -257,7 +257,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `loadSyncInputs()` 和 `resolveFastSyncScope()` 函数。
@@ -285,12 +285,12 @@
    - 返回 `{ useFast, upgraded, upgradeReason, changedFiles }`
 
 #### 验收标准
-- [ ] `loadSyncInputs()` 正确读取 facts/rules/docs
-- [ ] facts 缺失时返回 2404
-- [ ] `resolveFastSyncScope()` 正确使用 Git 变更
-- [ ] 高风险变更时升级完整检查
-- [ ] Git 不可用时降级
-- [ ] 对应测试绿灯
+- [x] `loadSyncInputs()` 正确读取 facts/rules/docs
+- [x] facts 缺失时返回 2404
+- [x] `resolveFastSyncScope()` 正确使用 Git 变更
+- [x] 高风险变更时升级完整检查
+- [x] Git 不可用时降级
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（CI 漂移检查、快速检查升级）
@@ -302,7 +302,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `replaceManagedBlock()`、`extractManagedBlock()` 和 `validateProtectedContent()` 函数。
@@ -332,11 +332,11 @@
    - 不一致时返回冲突列表
 
 #### 验收标准
-- [ ] `extractManagedBlock()` 正确提取 block 内容
-- [ ] `replaceManagedBlock()` 仅替换 block 内部
-- [ ] `replaceManagedBlock()` 不存在时插入
-- [ ] `validateProtectedContent()` 检测非托管内容变更
-- [ ] 对应测试绿灯
+- [x] `extractManagedBlock()` 正确提取 block 内容
+- [x] `replaceManagedBlock()` 仅替换 block 内部
+- [x] `replaceManagedBlock()` 不存在时插入
+- [x] `validateProtectedContent()` 检测非托管内容变更
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（同步默认文档 - 保留非托管用户内容）
@@ -348,7 +348,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 4 个文档渲染器：readme、agents、claude、copilot。
@@ -377,10 +377,10 @@
 6. 所有渲染器不得包含敏感文件内容
 
 #### 验收标准
-- [ ] 4 个渲染器生成正确的 managed block
-- [ ] REVIEW_REQUIRED 标记被保留
-- [ ] 无敏感内容输出
-- [ ] 对应测试绿灯
+- [x] 4 个渲染器生成正确的 managed block
+- [x] REVIEW_REQUIRED 标记被保留
+- [x] 无敏感内容输出
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（未确认事实标注）
@@ -392,7 +392,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-04, TASK-SY-05, TASK-SY-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planDocumentSync()` 函数，为每个文档生成目标内容、diff、drift 和状态。
@@ -416,11 +416,11 @@
 3. 返回 `{ documents: DocumentPlan[], drift, reviewRequired }`
 
 #### 验收标准
-- [ ] 正确检测漂移（planned ≠ current）
-- [ ] 正确标记 up-to-date（planned = current）
-- [ ] 保护内容冲突时返回 2403
-- [ ] REVIEW_REQUIRED 被保留
-- [ ] 对应测试绿灯
+- [x] 正确检测漂移（planned ≠ current）
+- [x] 正确标记 up-to-date（planned = current）
+- [x] 保护内容冲突时返回 2403
+- [x] REVIEW_REQUIRED 被保留
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -432,7 +432,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-04, TASK-SY-05, TASK-SY-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `writeSyncReport()` 函数，生成 Markdown + JSON 同 stem 报告。
@@ -455,11 +455,11 @@
    - 写入失败返回 5401
 
 #### 验收标准
-- [ ] Markdown 和 JSON 报告同 stem
-- [ ] 报告包含 mode、drift、documents
-- [ ] 无敏感内容
-- [ ] 写入失败返回 5401
-- [ ] 对应测试绿灯
+- [x] Markdown 和 JSON 报告同 stem
+- [x] 报告包含 mode、drift、documents
+- [x] 无敏感内容
+- [x] 写入失败返回 5401
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（漂移检查与报告）
@@ -471,7 +471,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-SY-07, TASK-SY-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runSyncCommand()` 函数，串联 sync pipeline 并输出结果。
@@ -497,13 +497,13 @@
    - 返回 `SyncResult`
 
 #### 验收标准
-- [ ] 默认同步写入 managed block
-- [ ] `--check` 漂移时返回 2401
-- [ ] `--docs` 过滤文档
-- [ ] `--dry-run` 零写入
-- [ ] `--fast` 正确使用/升级
-- [ ] 非法 docs 返回 2402
-- [ ] 对应测试绿灯
+- [x] 默认同步写入 managed block
+- [x] `--check` 漂移时返回 2401
+- [x] `--docs` 过滤文档
+- [x] `--dry-run` 零写入
+- [x] `--fast` 正确使用/升级
+- [x] 非法 docs 返回 2402
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -515,7 +515,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-SY-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 sync 端到端流程。
@@ -540,10 +540,10 @@
 3. 运行全部测试、tsc、lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -579,10 +579,10 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness sync --json` 输出合法 JSON
-- [ ] `harness sync --check` 检测漂移
-- [ ] `harness sync --docs readme,agents --dry-run` 预览计划
-- [ ] 报告文件存在于 `.harness/reports/sync/`
+- [x] `harness sync --json` 输出合法 JSON
+- [x] `harness sync --check` 检测漂移
+- [x] `harness sync --docs readme,agents --dry-run` 预览计划
+- [x] 报告文件存在于 `.harness/reports/sync/`
 
 ---
 
@@ -649,9 +649,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（sync 命令说明）
-- [ ] 接口文档更新
-- [ ] 变更日志更新
+- [x] README 更新（sync 命令说明）
+- [x] 接口文档更新
+- [x] 变更日志更新
 
 ---
 

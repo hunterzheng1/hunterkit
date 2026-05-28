@@ -139,7 +139,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 adapter-skill-runtime 模块共享的 TypeScript 类型。
@@ -164,9 +164,9 @@
 10. 定义 `ProjectionContext`：`{ packageName, repairCommand, sourcePath, sourceHash }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `AdapterProjectionStatus.status` 包含 5 个枚举值
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `AdapterProjectionStatus.status` 包含 5 个枚举值
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -178,7 +178,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `createAdapterRegistry()` 函数，注册 Claude、Codex、Copilot、Cursor 的 source/projection 路径规则。
@@ -201,10 +201,10 @@
 8. 提供 `getAdapterRule(tool)` 和 `listAdapterRules()` 方法
 
 #### 验收标准
-- [ ] 注册表包含 4 个工具规则
-- [ ] 每个规则的 source 路径在 `.harness/adapters/**`
-- [ ] 每个规则的 projection 路径在平台固定识别路径
-- [ ] `npx tsc --noEmit` 通过
+- [x] 注册表包含 4 个工具规则
+- [x] 每个规则的 source 路径在 `.harness/adapters/**`
+- [x] 每个规则的 projection 路径在平台固定识别路径
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§1 场景（安装 Claude/Codex Skill）
@@ -216,7 +216,7 @@
 
 - **类型**: 配置
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 创建 adapter 源模板文件，作为 source-of-truth 的 Skill 和 metadata 模板。
@@ -239,10 +239,10 @@
 6. 所有模板不得包含 API key、token、RAGFlow 地址
 
 #### 验收标准
-- [ ] shared SKILL.md 包含意图识别、CLI 路由、报告摘要说明
-- [ ] 所有模板包含 source path 和 `harness config --repair-adapters` 命令
-- [ ] 无内部来源项目名作为用户命令
-- [ ] 无敏感信息（key、token、secret）
+- [x] shared SKILL.md 包含意图识别、CLI 路由、报告摘要说明
+- [x] 所有模板包含 source path 和 `harness config --repair-adapters` 命令
+- [x] 无内部来源项目名作为用户命令
+- [x] 无敏感信息（key、token、secret）
 
 #### 关联设计
 - spec.md 章节：§1 需求项（单一 Harness Skill、Skill 路由职责边界）
@@ -254,7 +254,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-AR-01, TASK-AR-02, TASK-AR-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 adapter-skill-runtime 模块的完整单元测试骨架（红灯状态）。
@@ -298,10 +298,10 @@
 9. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.2 状态机所有状态
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.2 状态机所有状态
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -313,7 +313,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `ensureAdapterSources()` 和 `readAdapterSource()` 函数，确保 `.harness/adapters/**` 源模板存在。
@@ -338,11 +338,11 @@
 4. 缺失必要模板时抛出 2201
 
 #### 验收标准
-- [ ] `ensureAdapterSources()` 创建缺失的源模板
-- [ ] `ensureAdapterSources()` 验证已有模板完整性
-- [ ] `readAdapterSource()` 对不存在源返回 `null`
-- [ ] 缺失必要模板时返回 2201
-- [ ] 对应测试绿灯
+- [x] `ensureAdapterSources()` 创建缺失的源模板
+- [x] `ensureAdapterSources()` 验证已有模板完整性
+- [x] `readAdapterSource()` 对不存在源返回 `null`
+- [x] 缺失必要模板时返回 2201
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（安装 Claude/Codex Skill）
@@ -354,7 +354,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `renderProjection()` 函数，将 source 模板渲染成运行时薄投影。
@@ -382,11 +382,11 @@
 5. 返回 `{ targetPath, content, sourceHash, managed: true }`
 
 #### 验收标准
-- [ ] 渲染结果包含 managed marker
-- [ ] 渲染结果包含 source hash
-- [ ] 渲染结果包含 repair 命令
-- [ ] 敏感内容被检测并阻断
-- [ ] 对应测试绿灯
+- [x] 渲染结果包含 managed marker
+- [x] 渲染结果包含 source hash
+- [x] 渲染结果包含 repair 命令
+- [x] 敏感内容被检测并阻断
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 需求项（Skill 路由职责边界）
@@ -398,7 +398,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `checkAdapterDrift()` 函数，比较 source hash 和 projection hash 判断同步状态。
@@ -421,12 +421,12 @@
 3. 实现 `checkAllAdapterDrift(paths, tools): AdapterProjectionStatus[]`
 
 #### 验收标准
-- [ ] projection 不存在时返回 `missing`
-- [ ] hash 匹配时返回 `synced`
-- [ ] hash 不同时返回 `drifted`
-- [ ] 无 managed marker 时返回 `conflict`
-- [ ] source path 不匹配时返回 `conflict`
-- [ ] 对应测试绿灯
+- [x] projection 不存在时返回 `missing`
+- [x] hash 匹配时返回 `synced`
+- [x] hash 不同时返回 `drifted`
+- [x] 无 managed marker 时返回 `conflict`
+- [x] source path 不匹配时返回 `conflict`
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（投影漂移检查）
@@ -438,7 +438,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-05, TASK-AR-06, TASK-AR-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planProjectionWrites()` 和 `applyProjectionWrites()` 函数，含冲突检测和 transaction 写入。
@@ -464,12 +464,12 @@
    - 写入失败时 rollback，返回 5201
 
 #### 验收标准
-- [ ] `planProjectionWrites()` 为 missing/drifted 生成操作
-- [ ] `planProjectionWrites()` 跳过 conflict 目标
-- [ ] `applyProjectionWrites()` dry-run 时零写入
-- [ ] `applyProjectionWrites()` 通过 transaction 写入
-- [ ] 冲突时返回 2202
-- [ ] 对应测试绿灯
+- [x] `planProjectionWrites()` 为 missing/drifted 生成操作
+- [x] `planProjectionWrites()` 跳过 conflict 目标
+- [x] `applyProjectionWrites()` dry-run 时零写入
+- [x] `applyProjectionWrites()` 通过 transaction 写入
+- [x] 冲突时返回 2202
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（修复运行时投影）
@@ -481,7 +481,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-05, TASK-AR-06, TASK-AR-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planHookProjection()` 函数，规划 `.claude/settings.json`、`.codex/hooks.json` 等 Hook 投影。
@@ -503,10 +503,10 @@
 3. Hook 投影失败时标记 warning，不阻断 Skill 投影
 
 #### 验收标准
-- [ ] 为 Claude 和 Codex 生成 Hook 投影计划
-- [ ] Hook 配置缺少字段时返回 2204
-- [ ] Hook 失败不阻断 Skill 投影
-- [ ] 对应测试绿灯
+- [x] 为 Claude 和 Codex 生成 Hook 投影计划
+- [x] Hook 配置缺少字段时返回 2204
+- [x] Hook 失败不阻断 Skill 投影
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 需求项（Adapter 与 Hook 投影修复）
@@ -518,7 +518,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-08, TASK-AR-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runRepairAdaptersCommand()` 函数，处理 `harness config --repair-adapters`。
@@ -543,11 +543,11 @@
    - 返回 `AdapterRepairResult`
 
 #### 验收标准
-- [ ] 修复所有启用工具的投影
-- [ ] `--ai-tools` 过滤目标工具
-- [ ] 未知工具返回 2203
-- [ ] dry-run 时零写入
-- [ ] 对应测试绿灯
+- [x] 修复所有启用工具的投影
+- [x] `--ai-tools` 过滤目标工具
+- [x] 未知工具返回 2203
+- [x] dry-run 时零写入
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（修复运行时投影）
@@ -559,7 +559,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-AR-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `collectAdapterDoctorInfo()` 函数，为 `harness doctor` 收集 adapter 漂移状态。
@@ -580,10 +580,10 @@
 3. 返回 `{ adapters: AdapterProjectionStatus[], repairCommand }`
 
 #### 验收标准
-- [ ] 返回每个工具的 drift/missing/synced/conflict 状态
-- [ ] 包含 repair 命令
-- [ ] 不写文件
-- [ ] 对应测试绿灯
+- [x] 返回每个工具的 drift/missing/synced/conflict 状态
+- [x] 包含 repair 命令
+- [x] 不写文件
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（投影漂移检查）
@@ -595,7 +595,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-AR-10, TASK-AR-11
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 adapter-skill-runtime 端到端流程。
@@ -619,10 +619,10 @@
 5. 运行 lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -657,10 +657,10 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness config --repair-adapters --dry-run` 输出投影计划
-- [ ] `harness config --repair-adapters` 生成投影文件
-- [ ] `harness doctor --json` 输出 adapter 漂移状态
-- [ ] 投影文件包含 managed marker 和 repair 命令
+- [x] `harness config --repair-adapters --dry-run` 输出投影计划
+- [x] `harness config --repair-adapters` 生成投影文件
+- [x] `harness doctor --json` 输出 adapter 漂移状态
+- [x] 投影文件包含 managed marker 和 repair 命令
 
 ---
 
@@ -733,9 +733,9 @@
 
 ### 7.4 文档更新
 
-- [ ] README 更新（adapter 结构说明）
-- [ ] 接口文档更新（repair-adapters 命令）
-- [ ] 变更日志更新
+- [x] README 更新（adapter 结构说明）
+- [x] 接口文档更新（repair-adapters 命令）
+- [x] 变更日志更新
 
 ---
 

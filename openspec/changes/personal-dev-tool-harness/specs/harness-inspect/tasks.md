@@ -120,7 +120,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 inspect 模块共享的 TypeScript 类型，包括 `InspectOptions`、`InspectScope`、`RepoMap`、各类 Fact 类型和 `ReviewRequiredItem`。
@@ -145,9 +145,9 @@
 11. 定义 `InspectResult`：`{ factsPath, moduleMapPath, rulesPath, scope, reviewRequired }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `RepoMap` 包含全部 10 个核心字段
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `RepoMap` 包含全部 10 个核心字段
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -159,7 +159,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-IN-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 inspect 模块完整单元测试骨架（红灯状态），覆盖范围解析、文件遍历、scanner、模块检测、输出写入等。
@@ -205,10 +205,10 @@
 9. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.1 核心流程所有分支
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.1 核心流程所有分支
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -220,7 +220,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveInspectScope()` 和 `walkProjectFiles()` 函数，处理扫描范围校验和文件遍历。
@@ -248,11 +248,11 @@
    - 返回文件列表（路径、相对路径、大小、是否敏感标记）
 
 #### 验收标准
-- [ ] `resolveInspectScope()` 正确校验路径范围
-- [ ] 越界路径抛出 2302
-- [ ] `walkProjectFiles()` 跳过默认忽略目录
-- [ ] `walkProjectFiles()` 跳过敏感文件内容读取
-- [ ] 对应测试绿灯
+- [x] `resolveInspectScope()` 正确校验路径范围
+- [x] 越界路径抛出 2302
+- [x] `walkProjectFiles()` 跳过默认忽略目录
+- [x] `walkProjectFiles()` 跳过敏感文件内容读取
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（限定路径扫描）
@@ -264,7 +264,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 4 个 Scanner 插件：build-scanner、docs-scanner、agent-scanner、ci-scanner。
@@ -287,11 +287,11 @@
 5. 每个 scanner 接收 `ScannedFile[]`，返回对应 Fact 数组
 
 #### 验收标准
-- [ ] build-scanner 正确识别 package.json、pom.xml 等
-- [ ] docs-scanner 正确识别 README、AGENTS、CLAUDE 等
-- [ ] agent-scanner 正确识别 .claude/、.agents/ 等
-- [ ] ci-scanner 正确识别 GitHub Actions 等
-- [ ] 对应测试绿灯
+- [x] build-scanner 正确识别 package.json、pom.xml 等
+- [x] docs-scanner 正确识别 README、AGENTS、CLAUDE 等
+- [x] agent-scanner 正确识别 .claude/、.agents/ 等
+- [x] ci-scanner 正确识别 GitHub Actions 等
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（首次全量扫描）
@@ -303,7 +303,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `detectModules()` 函数，从源码目录、包结构、构建文件推导模块，不确定信息标记 REVIEW_REQUIRED。
@@ -325,10 +325,10 @@
 3. 返回模块列表和待确认项
 
 #### 验收标准
-- [ ] 从 workspaces 正确识别模块
-- [ ] 从源码目录识别候选模块
-- [ ] 不确定模块标记 REVIEW_REQUIRED
-- [ ] 对应测试绿灯
+- [x] 从 workspaces 正确识别模块
+- [x] 从源码目录识别候选模块
+- [x] 不确定模块标记 REVIEW_REQUIRED
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（生成模块图）
@@ -340,7 +340,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-03, TASK-IN-04, TASK-IN-05
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `writeRepoMap()` 函数，将 RepoMap 写入 `.harness/facts/repo-map.json`，含大小控制和 transaction。
@@ -364,11 +364,11 @@
 3. 实现 `summarizeLargeFacts(repoMap): { summarized: RepoMap, reviewRequired: ReviewRequiredItem[] }`
 
 #### 验收标准
-- [ ] 正确写入 repo-map.json
-- [ ] dry-run 时零写入
-- [ ] 超 5 MB 时摘要化并生成 REVIEW_REQUIRED
-- [ ] 写入失败时 rollback
-- [ ] 对应测试绿灯
+- [x] 正确写入 repo-map.json
+- [x] dry-run 时零写入
+- [x] 超 5 MB 时摘要化并生成 REVIEW_REQUIRED
+- [x] 写入失败时 rollback
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（机器可读事实契约）
@@ -380,7 +380,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-03, TASK-IN-04, TASK-IN-05
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `renderModuleMap()` 和 `renderRulesGenerated()` 函数，生成人类可读的 Markdown 输出。
@@ -405,9 +405,9 @@
    - 包含生成时间和 Harness 版本
 
 #### 验收标准
-- [ ] module-map.md 包含模块名、路径、语言、构建入口
-- [ ] rules.generated.md 标记 REVIEW_REQUIRED
-- [ ] 对应测试绿灯
+- [x] module-map.md 包含模块名、路径、语言、构建入口
+- [x] rules.generated.md 标记 REVIEW_REQUIRED
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（生成规则建议、生成模块图）
@@ -419,7 +419,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-IN-06, TASK-IN-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runInspectCommand()` 函数，串联扫描 pipeline 并输出结果。
@@ -446,12 +446,12 @@
    - 返回 `InspectResult`
 
 #### 验收标准
-- [ ] 全量扫描生成 factsPath 和 moduleMapPath
-- [ ] `--rules` 时生成 rulesPath
-- [ ] `--path` 限定扫描范围
-- [ ] dry-run 时零写入
-- [ ] 首次无 facts 自动提升为 full
-- [ ] 对应测试绿灯
+- [x] 全量扫描生成 factsPath 和 moduleMapPath
+- [x] `--rules` 时生成 rulesPath
+- [x] `--path` 限定扫描范围
+- [x] dry-run 时零写入
+- [x] 首次无 facts 自动提升为 full
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -463,7 +463,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-IN-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 inspect 端到端流程。
@@ -486,10 +486,10 @@
 3. 运行全部测试、tsc、lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -523,10 +523,10 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness inspect --full --json` 输出合法 JSON
-- [ ] `harness inspect --path src --json` 限定范围
-- [ ] `harness inspect --rules` 生成 rules.generated.md
-- [ ] `harness inspect --dry-run` 零写入
+- [x] `harness inspect --full --json` 输出合法 JSON
+- [x] `harness inspect --path src --json` 限定范围
+- [x] `harness inspect --rules` 生成 rules.generated.md
+- [x] `harness inspect --dry-run` 零写入
 
 ---
 
@@ -590,9 +590,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（inspect 命令说明）
-- [ ] 接口文档更新
-- [ ] 变更日志更新
+- [x] README 更新（inspect 命令说明）
+- [x] 接口文档更新
+- [x] 变更日志更新
 
 ---
 

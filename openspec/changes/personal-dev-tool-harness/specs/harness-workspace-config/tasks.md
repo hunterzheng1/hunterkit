@@ -138,7 +138,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 workspace-config 模块共享的 TypeScript 类型，包括 `HarnessConfig`、`WorkspaceStatus`、`WorkspaceRequest`、`MigrationOptions`、`MigrationPlan`、`TransactionRecord` 等。
@@ -162,9 +162,9 @@
 9. 定义 `ConfigValidationResult`：`{ valid, errors, missing }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `HarnessConfig` 包含全部 7 个顶层字段
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `HarnessConfig` 包含全部 7 个顶层字段
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义（请求参数、响应结构）
@@ -176,7 +176,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveProjectRoot()` 和 `resolveWorkspacePaths()` 函数，解析 `--cwd` 并生成 `.harness/**` 完整路径树，防止路径越界。
@@ -201,11 +201,11 @@
 5. 实现 `isWritablePath(target: string, paths: WorkspacePaths): boolean`：只允许写入 `.harness/**` 和平台必需投影路径
 
 #### 验收标准
-- [ ] `resolveProjectRoot()` 对不存在路径抛出错误
-- [ ] `resolveProjectRoot()` 返回规范化的绝对路径
-- [ ] `resolveWorkspacePaths()` 返回完整路径树
-- [ ] `isPathWithinRoot()` 拒绝 `../` 越界路径
-- [ ] `npx tsc --noEmit` 通过
+- [x] `resolveProjectRoot()` 对不存在路径抛出错误
+- [x] `resolveProjectRoot()` 返回规范化的绝对路径
+- [x] `resolveWorkspacePaths()` 返回完整路径树
+- [x] `isPathWithinRoot()` 拒绝 `../` 越界路径
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§1 场景（初始化工作区）
@@ -217,7 +217,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-WS-01, TASK-WS-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 workspace-config 模块的完整单元测试骨架（红灯状态），覆盖配置校验、事务系统、工作区创建、旧来源迁移等核心场景。
@@ -266,10 +266,10 @@
 9. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.1 核心流程所有分支
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.1 核心流程所有分支
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -281,7 +281,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `validateHarnessConfig()`、`loadHarnessConfig()`、`writeHarnessConfig()` 和 `mergeLocalConfig()` 函数，使配置相关测试通过。
@@ -314,11 +314,11 @@
    - `reportableConfig` 不含 local 值
 
 #### 验收标准
-- [ ] `validateHarnessConfig()` 对有效配置返回 `{ valid: true }`
-- [ ] `validateHarnessConfig()` 对缺失字段返回 `missing` 列表
-- [ ] `loadHarnessConfig()` 读取并校验配置
-- [ ] `mergeLocalConfig()` 产出 `effectiveConfig` 和 `reportableConfig`
-- [ ] 配置相关测试全部绿灯
+- [x] `validateHarnessConfig()` 对有效配置返回 `{ valid: true }`
+- [x] `validateHarnessConfig()` 对缺失字段返回 `missing` 列表
+- [x] `loadHarnessConfig()` 读取并校验配置
+- [x] `mergeLocalConfig()` 产出 `effectiveConfig` 和 `reportableConfig`
+- [x] 配置相关测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（读取有效配置、本地私有配置）
@@ -330,7 +330,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `readStateFile()` 和 `writeStateFile()` 函数，管理 `.harness/state/*.json` 文件。
@@ -354,11 +354,11 @@
 4. 预定义状态文件名常量：`INSTALL_STATE`、`FACTS_STATE`、`ACTIVE_CHANGE_STATE`、`CAPABILITIES_STATE`
 
 #### 验收标准
-- [ ] `readStateFile()` 对不存在文件返回 `null`
-- [ ] `readStateFile()` 读取有效 JSON 并校验 `schemaVersion`
-- [ ] `writeStateFile()` 自动注入 `schemaVersion`
-- [ ] `writeStateFile()` 通过 transaction 写入
-- [ ] 状态管理测试全部绿灯
+- [x] `readStateFile()` 对不存在文件返回 `null`
+- [x] `readStateFile()` 读取有效 JSON 并校验 `schemaVersion`
+- [x] `writeStateFile()` 自动注入 `schemaVersion`
+- [x] `writeStateFile()` 通过 transaction 写入
+- [x] 状态管理测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§4.3 数据存储
@@ -370,7 +370,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `beginTransaction()`、`stageWrite()`、`commitTransaction()` 和 `rollbackTransaction()` 函数，提供 dry-run、backup、原子写入和回滚能力。
@@ -405,12 +405,12 @@
 6. 实现 `getTransactionRecord(tx: Transaction): TransactionRecord`
 
 #### 验收标准
-- [ ] `beginTransaction()` 生成唯一 id
-- [ ] `stageWrite()` 拒绝越界路径
-- [ ] `commitTransaction()` dry-run 时零写入
-- [ ] `commitTransaction()` 成功写入所有 staged 文件
-- [ ] `rollbackTransaction()` 恢复所有备份
-- [ ] 事务相关测试全部绿灯
+- [x] `beginTransaction()` 生成唯一 id
+- [x] `stageWrite()` 拒绝越界路径
+- [x] `commitTransaction()` dry-run 时零写入
+- [x] `commitTransaction()` 成功写入所有 staged 文件
+- [x] `rollbackTransaction()` 恢复所有备份
+- [x] 事务相关测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（事务成功、事务失败）
@@ -422,7 +422,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-04, TASK-WS-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `ensureWorkspace()` 和 `readWorkspaceStatus()` 函数，创建 `.harness/` 目录结构并检查初始化状态。
@@ -452,11 +452,11 @@
    - 不存在则返回 `initialized: false`
 
 #### 验收标准
-- [ ] `ensureWorkspace()` 创建完整 `.harness/` 目录结构
-- [ ] `ensureWorkspace()` dry-run 时零写入
-- [ ] `ensureWorkspace()` 失败时自动 rollback
-- [ ] `readWorkspaceStatus()` 正确判断初始化状态
-- [ ] 工作区相关测试全部绿灯
+- [x] `ensureWorkspace()` 创建完整 `.harness/` 目录结构
+- [x] `ensureWorkspace()` dry-run 时零写入
+- [x] `ensureWorkspace()` 失败时自动 rollback
+- [x] `readWorkspaceStatus()` 正确判断初始化状态
+- [x] 工作区相关测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（初始化工作区）
@@ -468,7 +468,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-04, TASK-WS-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `detectLegacySources()` 和 `buildMigrationPlan()` 函数，识别旧来源目录并生成迁移计划。
@@ -500,11 +500,11 @@
    - 失败时 rollback
 
 #### 验收标准
-- [ ] `detectLegacySources()` 正确识别存在的旧目录
-- [ ] `buildMigrationPlan()` 生成正确的 copy operations
-- [ ] `buildMigrationPlan()` 检测目标冲突
-- [ ] `applyMigrationPlan()` 通过 transaction 执行
-- [ ] 迁移相关测试全部绿灯
+- [x] `detectLegacySources()` 正确识别存在的旧目录
+- [x] `buildMigrationPlan()` 生成正确的 copy operations
+- [x] `buildMigrationPlan()` 检测目标冲突
+- [x] `applyMigrationPlan()` 通过 transaction 执行
+- [x] 迁移相关测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（兼容旧目录）
@@ -516,7 +516,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-07, TASK-WS-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runStatusCommand()` 和 `runDoctorCommand()` 函数，输出工作区状态和诊断信息。
@@ -546,12 +546,12 @@
    - 返回诊断结果和修复建议
 
 #### 验收标准
-- [ ] `runStatusCommand()` 返回正确的 `WorkspaceStatus`
-- [ ] `runStatusCommand()` 不暴露 local config 值
-- [ ] `runDoctorCommand()` 检查目录完整性
-- [ ] `runDoctorCommand()` 检查配置有效性
-- [ ] `runDoctorCommand()` 检测 legacy sources
-- [ ] 命令测试全部绿灯
+- [x] `runStatusCommand()` 返回正确的 `WorkspaceStatus`
+- [x] `runStatusCommand()` 不暴露 local config 值
+- [x] `runDoctorCommand()` 检查目录完整性
+- [x] `runDoctorCommand()` 检查配置有效性
+- [x] `runDoctorCommand()` 检测 legacy sources
+- [x] 命令测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -563,7 +563,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-WS-07, TASK-WS-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runConfigCommand()` 函数，处理 `harness config --migrate-*` 请求（预览或执行迁移）。
@@ -588,11 +588,11 @@
    - 成功时返回 transaction record
 
 #### 验收标准
-- [ ] 无 migrate flag 时返回参数错误
-- [ ] dry-run 时返回迁移计划且零写入
-- [ ] 非 dry-run 时通过 transaction 执行迁移
-- [ ] 冲突时返回 code 2104
-- [ ] config 命令测试全部绿灯
+- [x] 无 migrate flag 时返回参数错误
+- [x] dry-run 时返回迁移计划且零写入
+- [x] 非 dry-run 时通过 transaction 执行迁移
+- [x] 冲突时返回 code 2104
+- [x] config 命令测试全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（事务成功、事务失败、兼容旧目录）
@@ -604,7 +604,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-WS-09, TASK-WS-10
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 workspace-config 端到端流程；执行构建和 lint 验证。
@@ -628,11 +628,11 @@
 5. 运行 lint：无错误
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
-- [ ] 测试覆盖率 ≥ 80%
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
+- [x] 测试覆盖率 ≥ 80%
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -669,11 +669,11 @@
 
 ### 4.3 手动验证清单
 
-- [ ] 在临时目录执行初始化后 `.harness/` 结构完整
-- [ ] `harness status --json` 输出合法 JSON
-- [ ] `harness doctor --json` 输出诊断信息
-- [ ] `harness config --migrate-docsync --dry-run` 输出迁移计划
-- [ ] 事务失败后 backup 文件可用于人工恢复
+- [x] 在临时目录执行初始化后 `.harness/` 结构完整
+- [x] `harness status --json` 输出合法 JSON
+- [x] `harness doctor --json` 输出诊断信息
+- [x] `harness config --migrate-docsync --dry-run` 输出迁移计划
+- [x] 事务失败后 backup 文件可用于人工恢复
 
 ---
 
@@ -742,9 +742,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（工作区结构说明）
-- [ ] 接口文档更新（config/status/doctor 命令）
-- [ ] 变更日志更新
+- [x] README 更新（工作区结构说明）
+- [x] 接口文档更新（config/status/doctor 命令）
+- [x] 变更日志更新
 
 ---
 

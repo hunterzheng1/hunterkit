@@ -137,7 +137,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 knowledge 模块共享的 TypeScript 类型。
@@ -162,9 +162,9 @@
 11. 定义 `KnowledgeDbMeta`：`{ schemaVersion, indexedAt }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `KnowledgeDocument` 包含 sourcePath、mtimeMs、contentHash
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `KnowledgeDocument` 包含 sourcePath、mtimeMs、contentHash
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -176,7 +176,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `validateKnowledgeOptions()` 函数，校验 index/search/limit/query 参数。
@@ -197,10 +197,10 @@
    - 合法返回 `{ valid: true }`
 
 #### 验收标准
-- [ ] 无 index 且无 search 时返回参数错误
-- [ ] search 为空或超 200 字符返回 2701
-- [ ] limit 越界时返回参数错误
-- [ ] `npx tsc --noEmit` 通过
+- [x] 无 index 且无 search 时返回参数错误
+- [x] search 为空或超 200 字符返回 2701
+- [x] limit 越界时返回参数错误
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 错误码 2701
@@ -212,7 +212,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `loadKnowledgeConfig()`、`ignoreRemoteKnowledgeConfig()`、`buildKnowledgeSources()` 和 `assertSourceInsideProject()` 函数。
@@ -244,11 +244,11 @@
 8. 实现 `assertSourceInsideProject(sourcePath, projectRoot): void`：越界返回 2703
 
 #### 验收标准
-- [ ] 配置正确加载
-- [ ] 远程配置被忽略并标记
-- [ ] 默认来源正确构建
-- [ ] 越界路径返回 2703
-- [ ] `npx tsc --noEmit` 通过
+- [x] 配置正确加载
+- [x] 远程配置被忽略并标记
+- [x] 默认来源正确构建
+- [x] 越界路径返回 2703
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地与隐私边界）
@@ -260,7 +260,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-KN-01, TASK-KN-02, TASK-KN-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 knowledge 模块完整单元测试骨架（红灯状态）。
@@ -321,10 +321,10 @@
 19. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.2 状态机所有状态
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.2 状态机所有状态
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -336,7 +336,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `scanKnowledgeSources()`、`shouldSkipSensitiveFile()` 和 `redactSensitiveText()` 函数。
@@ -363,11 +363,11 @@
    - 命中敏感模式时替换为 `[REDACTED]`
 
 #### 验收标准
-- [ ] 正确扫描 Markdown/JSON 文档
-- [ ] 敏感文件被跳过
-- [ ] 敏感文本被脱敏
-- [ ] 跳过数量正确记录
-- [ ] 对应测试绿灯
+- [x] 正确扫描 Markdown/JSON 文档
+- [x] 敏感文件被跳过
+- [x] 敏感文本被脱敏
+- [x] 跳过数量正确记录
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地知识索引）
@@ -379,7 +379,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `parseMarkdownDocument()`、`chunkDocument()` 和 `hashContent()` 函数。
@@ -408,11 +408,11 @@
 6. 实现 `hashContent(content: string): string`：使用 `crypto.createHash('sha256')`
 
 #### 验收标准
-- [ ] Markdown 正确提取 title 和 headings
-- [ ] 解析失败时降级纯文本
-- [ ] 文档按标题和段落正确切片
-- [ ] hash 输出稳定
-- [ ] 对应测试绿灯
+- [x] Markdown 正确提取 title 和 headings
+- [x] 解析失败时降级纯文本
+- [x] 文档按标题和段落正确切片
+- [x] hash 输出稳定
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地知识索引）
@@ -424,7 +424,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `openKnowledgeDb()`、`assertFts5Available()` 和 `ensureKnowledgeSchema()` 函数。
@@ -454,11 +454,11 @@
    - 写入 schemaVersion 到 meta 表
 
 #### 验收标准
-- [ ] 数据库正确打开
-- [ ] FTS5 不可用时返回 2704
-- [ ] Schema 正确创建所有表和索引
-- [ ] schemaVersion 写入 meta 表
-- [ ] 对应测试绿灯
+- [x] 数据库正确打开
+- [x] FTS5 不可用时返回 2704
+- [x] Schema 正确创建所有表和索引
+- [x] schemaVersion 写入 meta 表
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§2.1 错误码 2704
@@ -470,7 +470,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-05, TASK-KN-06, TASK-KN-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `diffDocumentsForIndex()` 和 `runKnowledgeIndex()` 函数。
@@ -499,11 +499,11 @@
    - 写入时先删除旧 chunks，再插入新 chunks 和 FTS rows
 
 #### 验收标准
-- [ ] 增量 diff 正确检测新增/更新/删除/未变
-- [ ] dry-run 时零写入
-- [ ] 写入使用临时库 + 原子替换
-- [ ] 失败时保留旧库
-- [ ] 对应测试绿灯
+- [x] 增量 diff 正确检测新增/更新/删除/未变
+- [x] dry-run 时零写入
+- [x] 写入使用临时库 + 原子替换
+- [x] 失败时保留旧库
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（首次索引、增量索引）
@@ -515,7 +515,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `searchKnowledge()`、`buildSnippet()` 和 `rankSearchResults()` 函数。
@@ -546,12 +546,12 @@
    - 排序并截断
 
 #### 验收标准
-- [ ] FTS5 查询正确执行
-- [ ] 索引不存在时返回 2702
-- [ ] 片段正确生成且脱敏
-- [ ] 结果按 score 排序
-- [ ] limit 正确截断
-- [ ] 对应测试绿灯
+- [x] FTS5 查询正确执行
+- [x] 索引不存在时返回 2702
+- [x] 片段正确生成且脱敏
+- [x] 结果按 score 排序
+- [x] limit 正确截断
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（知识检索）
@@ -563,7 +563,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-08, TASK-KN-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `buildKnowledgeReport()` 函数，生成索引/搜索摘要和 ignored remote 说明。
@@ -584,10 +584,10 @@
    - 支持 JSON 与终端文本输出
 
 #### 验收标准
-- [ ] 报告包含索引和搜索摘要
-- [ ] 包含隐私统计
-- [ ] 包含远程配置忽略说明
-- [ ] 对应测试绿灯
+- [x] 报告包含索引和搜索摘要
+- [x] 包含隐私统计
+- [x] 包含远程配置忽略说明
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地与隐私边界）
@@ -599,7 +599,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-KN-08, TASK-KN-09, TASK-KN-10
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runKnowledgeCommand()` 函数，串联 knowledge pipeline 并输出结果。
@@ -634,11 +634,11 @@
    - 返回 `KnowledgeResult`
 
 #### 验收标准
-- [ ] index + search 同时使用时先索引后搜索
-- [ ] dry-run 时零写入
-- [ ] 远程配置被忽略
-- [ ] 错误码正确（2701-2704、5701）
-- [ ] 对应测试绿灯
+- [x] index + search 同时使用时先索引后搜索
+- [x] dry-run 时零写入
+- [x] 远程配置被忽略
+- [x] 错误码正确（2701-2704、5701）
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -650,7 +650,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-KN-11
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 knowledge 端到端流程。
@@ -676,10 +676,10 @@
 3. 运行全部测试、tsc、lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -717,10 +717,10 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness knowledge --index --json` 输出合法 JSON
-- [ ] `harness knowledge --search "query" --json` 返回搜索结果
-- [ ] `harness knowledge --index --dry-run` 零写入
-- [ ] knowledge.sqlite 存在于 `.harness/cache/`
+- [x] `harness knowledge --index --json` 输出合法 JSON
+- [x] `harness knowledge --search "query" --json` 返回搜索结果
+- [x] `harness knowledge --index --dry-run` 零写入
+- [x] knowledge.sqlite 存在于 `.harness/cache/`
 
 ---
 
@@ -795,9 +795,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（knowledge 命令说明）
-- [ ] 接口文档更新
-- [ ] 变更日志更新
+- [x] README 更新（knowledge 命令说明）
+- [x] 接口文档更新
+- [x] 变更日志更新
 
 ---
 

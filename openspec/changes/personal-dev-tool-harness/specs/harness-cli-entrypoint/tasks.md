@@ -130,7 +130,7 @@
 
 - **类型**: 配置
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 创建 `@hunterzheng/harness` npm 包基础结构，包括 `package.json`、`tsconfig.json`，安装核心依赖。
@@ -150,10 +150,10 @@
 4. 安装开发依赖：`npm install -D typescript @types/node tsup vitest`
 
 #### 验收标准
-- [ ] `package.json` 中 `bin.harness` 指向 `dist/bin/harness.js`
-- [ ] `engines.node` 设置为 `>=20.0.0`
-- [ ] `npm install` 成功完成，无报错
-- [ ] `npx tsc --noEmit` 不报错（空项目基线）
+- [x] `package.json` 中 `bin.harness` 指向 `dist/bin/harness.js`
+- [x] `engines.node` 设置为 `>=20.0.0`
+- [x] `npm install` 成功完成，无报错
+- [x] `npx tsc --noEmit` 不报错（空项目基线）
 
 #### 关联设计
 - spec.md 章节：§4.2 外部依赖（Node.js >= 20、npm >= 10、TypeScript >= 5）
@@ -165,7 +165,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 CLI 模块共享的 TypeScript 类型，包括 `ParsedCommand`、`GlobalOptions`、`CliResponse`、`CliArtifact`、`CommandContext`、`CommandHandler` 接口。
@@ -189,10 +189,10 @@
 9. 定义 `CliIo` 接口：`{ stdout: Writable; stderr: Writable; stdin: Readable }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `CliResponse` 包含 `code`、`msg`、`data`、`warnings` 字段
-- [ ] `GlobalOptions` 使用 camelCase（`dryRun`、`noColor`）
-- [ ] `npx tsc --noEmit` 通过，无类型错误
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `CliResponse` 包含 `code`、`msg`、`data`、`warnings` 字段
+- [x] `GlobalOptions` 使用 camelCase（`dryRun`、`noColor`）
+- [x] `npx tsc --noEmit` 通过，无类型错误
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义（请求参数、响应结构）
@@ -204,7 +204,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-CLI-01, TASK-CLI-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 CLI 入口模块的单元测试骨架，覆盖所有核心模块的测试用例结构（红灯状态），使用 mock `CliIo` 隔离终端输出。
@@ -248,10 +248,10 @@
 8. 所有测试用例标记为 `todo` 或预期失败（红灯状态）
 
 #### 验收标准
-- [ ] 测试文件可被测试运行器发现（`npx vitest run --reporter=verbose` 列出所有用例）
-- [ ] 所有测试用例处于红灯（失败）状态
-- [ ] mock `CliIo` 可正确捕获 stdout/stderr 输出
-- [ ] 测试覆盖 design.md §6.1 核心流程的所有分支
+- [x] 测试文件可被测试运行器发现（`npx vitest run --reporter=verbose` 列出所有用例）
+- [x] 所有测试用例处于红灯（失败）状态
+- [x] mock `CliIo` 可正确捕获 stdout/stderr 输出
+- [x] 测试覆盖 design.md §6.1 核心流程的所有分支
 
 #### 关联设计
 - spec.md 章节：§1 需求规格（所有场景）
@@ -263,7 +263,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-CLI-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `HarnessCliError` 错误类、`toCliResponse()` 转换函数和 `parseGlobalOptions()` 全局参数解析函数，使对应测试用例通过。
@@ -289,12 +289,12 @@
 10. 运行测试，确保 `parseGlobalOptions` 和 `HarnessCliError` 相关测试全部通过（绿灯）
 
 #### 验收标准
-- [ ] `HarnessCliError` 覆盖错误码 1001、1002、2001、4001、5001
-- [ ] `toCliResponse()` 对 `HarnessCliError` 返回对应 code/msg/warnings
-- [ ] `toCliResponse()` 对未知 `Error` 返回 code 5001
-- [ ] `parseGlobalOptions()` 正确解析所有 4 个全局参数
-- [ ] `parseGlobalOptions()` 对非法 `--cwd` 抛出 `HarnessCliError(1002)`
-- [ ] 对应测试用例全部绿灯
+- [x] `HarnessCliError` 覆盖错误码 1001、1002、2001、4001、5001
+- [x] `toCliResponse()` 对 `HarnessCliError` 返回对应 code/msg/warnings
+- [x] `toCliResponse()` 对未知 `Error` 返回 code 5001
+- [x] `parseGlobalOptions()` 正确解析所有 4 个全局参数
+- [x] `parseGlobalOptions()` 对非法 `--cwd` 抛出 `HarnessCliError(1002)`
+- [x] 对应测试用例全部绿灯
 
 #### 关联设计
 - spec.md 章节：§2.1 错误码定义、§1 场景（全局上下文参数）
@@ -306,7 +306,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-CLI-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `createCommandRegistry()` 和 `resolveCommand()` 函数，注册 8 个顶层命令并完成路由，使对应测试用例通过。
@@ -330,12 +330,12 @@
 9. 运行测试，确保注册表相关测试全部通过（绿灯）
 
 #### 验收标准
-- [ ] `resolve("inspect")` 返回有效 handler
-- [ ] `resolve("unknown")` 返回 `null`
-- [ ] `list()` 返回 8 个命令
-- [ ] 每个命令包含 `name`、`description`、`requiresInitializedWorkspace`
-- [ ] stub handler 被调用时返回 code 5001
-- [ ] 对应测试用例全部绿灯
+- [x] `resolve("inspect")` 返回有效 handler
+- [x] `resolve("unknown")` 返回 `null`
+- [x] `list()` 返回 8 个命令
+- [x] 每个命令包含 `name`、`description`、`requiresInitializedWorkspace`
+- [x] stub handler 被调用时返回 code 5001
+- [x] 对应测试用例全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 需求项（统一 CLI 入口 - 8 个顶层命令）
@@ -347,7 +347,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-CLI-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `writeCliResponse()` 和 `formatHumanSummary()` 函数，统一 JSON 与人类可读输出，使对应测试用例通过。
@@ -373,12 +373,12 @@
 8. 运行测试，确保输出相关测试全部通过（绿灯）
 
 #### 验收标准
-- [ ] JSON 模式下 stdout 只包含合法 JSON（`JSON.parse()` 不抛异常）
-- [ ] JSON 模式下无 ANSI 颜色码混入
-- [ ] 人类模式下显示命令名、状态和产物路径
-- [ ] 错误响应显示错误码和修复建议
-- [ ] `--no-color` 时输出无颜色码
-- [ ] 对应测试用例全部绿灯
+- [x] JSON 模式下 stdout 只包含合法 JSON（`JSON.parse()` 不抛异常）
+- [x] JSON 模式下无 ANSI 颜色码混入
+- [x] 人类模式下显示命令名、状态和产物路径
+- [x] 错误响应显示错误码和修复建议
+- [x] `--no-color` 时输出无颜色码
+- [x] 对应测试用例全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 需求项（命令参数与输出契约 - 机器可读输出）
@@ -390,7 +390,7 @@
 
 - **类型**: UI层
 - **依赖**: TASK-CLI-04, TASK-CLI-05
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runInteractiveEntrypoint()`、`runInitWizard()` 和 `runOperationMenu()` 函数，根据初始化状态分流到向导或菜单。
@@ -420,12 +420,12 @@
 5. 处理用户取消（Ctrl+C）：返回 `CliResponse` code 0，msg "cancelled"
 
 #### 验收标准
-- [ ] 未初始化项目进入向导流程
-- [ ] 已初始化项目进入操作菜单
-- [ ] 菜单展示 8 个顶层命令
-- [ ] 用户选择命令后正确路由到 handler
-- [ ] Ctrl+C 不抛出异常，返回 code 0
-- [ ] `--dry-run` 透传到向导/菜单的后续操作
+- [x] 未初始化项目进入向导流程
+- [x] 已初始化项目进入操作菜单
+- [x] 菜单展示 8 个顶层命令
+- [x] 用户选择命令后正确路由到 handler
+- [x] Ctrl+C 不抛出异常，返回 code 0
+- [x] `--dry-run` 透传到向导/菜单的后续操作
 
 #### 关联设计
 - spec.md 章节：§1 场景（首次运行进入初始化向导、已初始化项目进入操作菜单）
@@ -437,7 +437,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-CLI-04, TASK-CLI-05, TASK-CLI-06, TASK-CLI-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `main()` 函数和 `src/bin/harness.ts` binary shim，串联所有模块完成 CLI 核心流程。
@@ -469,14 +469,14 @@
 8. 运行测试，确保 `main()` 相关测试全部通过（绿灯）
 
 #### 验收标准
-- [ ] `main()` 无参数时进入交互模式
-- [ ] `main()` 有已知命令时路由到 handler
-- [ ] `main()` 有未知命令时返回 code 1001
-- [ ] `main()` 成功时返回退出码 0
-- [ ] `main()` 失败时返回非 0 退出码
-- [ ] `src/bin/harness.ts` 包含 shebang
-- [ ] `src/bin/harness.ts` 不直接调用 `process.exit()`
-- [ ] 对应测试用例全部绿灯
+- [x] `main()` 无参数时进入交互模式
+- [x] `main()` 有已知命令时路由到 handler
+- [x] `main()` 有未知命令时返回 code 1001
+- [x] `main()` 成功时返回退出码 0
+- [x] `main()` 失败时返回非 0 退出码
+- [x] `src/bin/harness.ts` 包含 shebang
+- [x] `src/bin/harness.ts` 不直接调用 `process.exit()`
+- [x] 对应测试用例全部绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -488,7 +488,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-CLI-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 CLI 端到端流程：参数解析 → 命令路由 → handler 执行 → 输出格式化。
@@ -516,11 +516,11 @@
 5. 运行全部测试：`npx vitest run`
 
 #### 验收标准
-- [ ] 所有集成测试通过（绿灯）
-- [ ] 所有单元测试通过（绿灯）
-- [ ] JSON 输出可被 `JSON.parse()` 正确解析
-- [ ] 错误码与 spec.md §2.1 定义一致
-- [ ] 测试覆盖率：核心流程分支 ≥ 80%
+- [x] 所有集成测试通过（绿灯）
+- [x] 所有单元测试通过（绿灯）
+- [x] JSON 输出可被 `JSON.parse()` 正确解析
+- [x] 错误码与 spec.md §2.1 定义一致
+- [x] 测试覆盖率：核心流程分支 ≥ 80%
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -532,7 +532,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-CLI-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 执行完整构建、lint 检查和 dry-run 验证，确保 CLI 可正常打包和运行。
@@ -556,12 +556,12 @@
 8. 运行 `npm pack --dry-run`：验证发布包内容不含敏感文件
 
 #### 验收标准
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] `npx vitest run` 所有测试通过
-- [ ] lint 无错误
-- [ ] `dist/bin/harness.js` 存在且包含 shebang
-- [ ] `node dist/bin/harness.js status --json` 输出合法 JSON
-- [ ] `npm pack --dry-run` 不含 `.env`、`*.local.json` 等敏感文件
+- [x] `npx tsc --noEmit` 无错误
+- [x] `npx vitest run` 所有测试通过
+- [x] lint 无错误
+- [x] `dist/bin/harness.js` 存在且包含 shebang
+- [x] `node dist/bin/harness.js status --json` 输出合法 JSON
+- [x] `npm pack --dry-run` 不含 `.env`、`*.local.json` 等敏感文件
 
 #### 关联设计
 - spec.md 章节：§3 物理约束、§5 安全与合规
@@ -603,11 +603,11 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `node dist/bin/harness.js status --json` 输出合法 JSON
-- [ ] `node dist/bin/harness.js doctor --json` 输出诊断信息
-- [ ] `node dist/bin/harness.js` 无参数进入交互流程
-- [ ] `node dist/bin/harness.js unknown-cmd` 显示错误码和修复建议
-- [ ] `npm pack --dry-run` 不含敏感文件
+- [x] `node dist/bin/harness.js status --json` 输出合法 JSON
+- [x] `node dist/bin/harness.js doctor --json` 输出诊断信息
+- [x] `node dist/bin/harness.js` 无参数进入交互流程
+- [x] `node dist/bin/harness.js unknown-cmd` 显示错误码和修复建议
+- [x] `npm pack --dry-run` 不含敏感文件
 
 ---
 
@@ -677,9 +677,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（CLI 使用说明）
-- [ ] 接口文档更新（命令契约）
-- [ ] 变更日志更新
+- [x] README 更新（CLI 使用说明）
+- [x] 接口文档更新（命令契约）
+- [x] 变更日志更新
 
 ---
 

@@ -126,7 +126,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 develop 模块共享的 TypeScript 类型。
@@ -150,9 +150,9 @@
 10. 定义 `DevelopChangeState`：`{ change, stage, source, canonicalRoot, legacyRoot, updatedAt }`
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `DevelopStage` 包含 8 个枚举值
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `DevelopStage` 包含 8 个枚举值
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -164,7 +164,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `validateChangeName()` 函数，校验 kebab-case 和 3-80 长度。
@@ -185,10 +185,10 @@
    - 合法返回 `{ valid: true }`
 
 #### 验收标准
-- [ ] 合法 kebab-case 名称通过
-- [ ] 非法名称（大写、空格、特殊字符）返回 2501
-- [ ] 长度 < 3 或 > 80 返回 2501
-- [ ] `npx tsc --noEmit` 通过
+- [x] 合法 kebab-case 名称通过
+- [x] 非法名称（大写、空格、特殊字符）返回 2501
+- [x] 长度 < 3 或 > 80 返回 2501
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 错误码 2501
@@ -200,7 +200,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveRequestedStage()` 函数，解析互斥阶段标志。
@@ -221,10 +221,10 @@
    - 空时返回 `{ stage: "unknown", explicit: false }`
 
 #### 验收标准
-- [ ] 单一阶段标志正确解析
-- [ ] 多阶段标志同时出现时返回错误
-- [ ] 无阶段标志时返回 `explicit: false`
-- [ ] `npx tsc --noEmit` 通过
+- [x] 单一阶段标志正确解析
+- [x] 多阶段标志同时出现时返回错误
+- [x] 无阶段标志时返回 `explicit: false`
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§1 场景（指定单阶段）
@@ -236,7 +236,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-DV-01, TASK-DV-02, TASK-DV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 develop 模块完整单元测试骨架（红灯状态）。
@@ -285,10 +285,10 @@
 12. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.2 状态机所有状态
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.2 状态机所有状态
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -300,7 +300,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveDevelopStorage()` 和 `readLegacyOpenSpecChange()` 函数。
@@ -330,10 +330,10 @@
    - 只读，不迁移
 
 #### 验收标准
-- [ ] 正确检测 canonical/legacy/mixed/missing
-- [ ] Legacy 读取只读，不写入
-- [ ] Legacy 不存在时返回 `null`
-- [ ] 对应测试绿灯
+- [x] 正确检测 canonical/legacy/mixed/missing
+- [x] Legacy 读取只读，不写入
+- [x] Legacy 不存在时返回 `null`
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（兼容旧 OpenSpec）
@@ -345,7 +345,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `readProposalMeta()` 函数，读取 proposal 的 mode 和 test-strategy。
@@ -368,10 +368,10 @@
    - frontmatter 缺失或非法时返回错误
 
 #### 验收标准
-- [ ] 正确解析 mode 和 test-strategy
-- [ ] 缺失时使用默认值
-- [ ] 非法值时返回错误
-- [ ] 对应测试绿灯
+- [x] 正确解析 mode 和 test-strategy
+- [x] 缺失时使用默认值
+- [x] 非法值时返回错误
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（TDD 任务策略传递）
@@ -383,7 +383,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `detectDevelopStage()` 和 `suggestNextStage()` 函数，根据已有文档判断下一步。
@@ -409,9 +409,9 @@
    - 仅返回建议，不自动触发
 
 #### 验收标准
-- [ ] 正确检测缺失文档并建议下一阶段
-- [ ] 建议仅返回给用户，不自动触发
-- [ ] 对应测试绿灯
+- [x] 正确检测缺失文档并建议下一阶段
+- [x] 建议仅返回给用户，不自动触发
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（自动进入下一阶段）
@@ -423,7 +423,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `buildTasksPolicy()` 函数，将 testStrategy 转换为 tasks DAG 策略。
@@ -444,11 +444,11 @@
 3. 值缺失或非法时返回可操作错误，不静默降级
 
 #### 验收标准
-- [ ] TDD 策略生成测试先行 DAG
-- [ ] impl-first 策略生成代码先行 DAG
-- [ ] none 策略不生成测试任务
-- [ ] 非法值返回错误
-- [ ] 对应测试绿灯
+- [x] TDD 策略生成测试先行 DAG
+- [x] impl-first 策略生成代码先行 DAG
+- [x] none 策略不生成测试任务
+- [x] 非法值返回错误
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（TDD 策略）
@@ -460,7 +460,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-05, TASK-DV-06, TASK-DV-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runDevelopCheck()` 和 `validateStageDependencies()` 函数，只读检查文档一致性。
@@ -486,10 +486,10 @@
    - 返回问题列表和阻断原因
 
 #### 验收标准
-- [ ] 正确检测阶段依赖缺失
-- [ ] `--check` 禁止任何写入
-- [ ] capability 不存在时返回 2503
-- [ ] 对应测试绿灯
+- [x] 正确检测阶段依赖缺失
+- [x] `--check` 禁止任何写入
+- [x] capability 不存在时返回 2503
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（只读检查）
@@ -501,7 +501,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-05, TASK-DV-06, TASK-DV-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planArtifacts()`、`writeArtifactsTransactionally()`、`buildDevelopReport()` 和 `writeDevelopReport()` 函数。
@@ -528,11 +528,11 @@
 6. 实现 `writeDevelopReport(report, context): string`：写入 `.harness/reports/develop/`
 
 #### 验收标准
-- [ ] `planArtifacts()` 生成正确计划
-- [ ] `dryRun=true` 时零写入
-- [ ] `writeArtifactsTransactionally()` 通过 transaction 写入
-- [ ] 报告写入 `.harness/reports/develop/`
-- [ ] 对应测试绿灯
+- [x] `planArtifacts()` 生成正确计划
+- [x] `dryRun=true` 时零写入
+- [x] `writeArtifactsTransactionally()` 通过 transaction 写入
+- [x] 报告写入 `.harness/reports/develop/`
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -544,7 +544,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-DV-08, TASK-DV-09, TASK-DV-10
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runDevelopCommand()` 函数，串联 develop pipeline 并输出结果。
@@ -573,12 +573,12 @@
    - 输出 `DevelopResult`
 
 #### 验收标准
-- [ ] 自动检测下一阶段
-- [ ] 单阶段标志正确执行
-- [ ] `--check` 只读
-- [ ] `--dry-run` 零写入
-- [ ] 错误码正确（2501-2505、5501）
-- [ ] 对应测试绿灯
+- [x] 自动检测下一阶段
+- [x] 单阶段标志正确执行
+- [x] `--check` 只读
+- [x] `--dry-run` 零写入
+- [x] 错误码正确（2501-2505、5501）
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -590,7 +590,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-DV-11
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 develop 端到端流程。
@@ -617,10 +617,10 @@
 3. 运行全部测试、tsc、lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -658,10 +658,10 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness develop my-change --json` 输出合法 JSON
-- [ ] `harness develop my-change --check` 只读检查
-- [ ] `harness develop my-change --dry-run` 零写入
-- [ ] `harness develop my-change --spec` 只处理 spec 阶段
+- [x] `harness develop my-change --json` 输出合法 JSON
+- [x] `harness develop my-change --check` 只读检查
+- [x] `harness develop my-change --dry-run` 零写入
+- [x] `harness develop my-change --spec` 只处理 spec 阶段
 
 ---
 
@@ -726,9 +726,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（develop 命令说明）
-- [ ] 接口文档更新
-- [ ] 变更日志更新
+- [x] README 更新（develop 命令说明）
+- [x] 接口文档更新
+- [x] 变更日志更新
 
 ---
 

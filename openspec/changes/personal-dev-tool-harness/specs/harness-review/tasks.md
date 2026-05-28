@@ -142,7 +142,7 @@
 
 - **类型**: 数据层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 定义 review 模块共享的 TypeScript 类型。
@@ -166,9 +166,9 @@
 10. 定义 `ReviewJsonReport`：包含 `schemaVersion: "review.v1"` 及所有字段
 
 #### 验收标准
-- [ ] 所有类型与 design.md §1.1 字段追溯表一致
-- [ ] `ReviewFinding` 包含 confidence 字段（0-100）
-- [ ] `npx tsc --noEmit` 通过
+- [x] 所有类型与 design.md §1.1 字段追溯表一致
+- [x] `ReviewFinding` 包含 confidence 字段（0-100）
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 接口定义
@@ -180,7 +180,7 @@
 
 - **类型**: 接口层
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `validateReviewOptions()` 函数，校验 scope/fix/full-lite 参数互斥。
@@ -202,11 +202,11 @@
    - 合法返回 `{ valid: true }`
 
 #### 验收标准
-- [ ] `local+staged` 同时出现返回 2602
-- [ ] `fix+noFix` 同时出现返回参数错误
-- [ ] `full+lite` 同时出现返回参数错误
-- [ ] 默认 `noFix=true`
-- [ ] `npx tsc --noEmit` 通过
+- [x] `local+staged` 同时出现返回 2602
+- [x] `fix+noFix` 同时出现返回参数错误
+- [x] `full+lite` 同时出现返回参数错误
+- [x] 默认 `noFix=true`
+- [x] `npx tsc --noEmit` 通过
 
 #### 关联设计
 - spec.md 章节：§2.1 错误码 2602
@@ -218,7 +218,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: TASK-RV-01, TASK-RV-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写 review 模块完整单元测试骨架（红灯状态）。
@@ -275,10 +275,10 @@
 14. 所有测试标记为红灯
 
 #### 验收标准
-- [ ] 测试文件可被运行器发现
-- [ ] 所有测试处于红灯状态
-- [ ] 覆盖 design.md §6.2 状态机所有状态
-- [ ] 覆盖 design.md §8.1 所有异常类型
+- [x] 测试文件可被运行器发现
+- [x] 所有测试处于红灯状态
+- [x] 覆盖 design.md §6.2 状态机所有状态
+- [x] 覆盖 design.md §8.1 所有异常类型
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -290,7 +290,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveReviewScope()` 和 `assertPathInsideProject()` 函数。
@@ -318,11 +318,11 @@
    - 返回 `{ kind, files, baseRef?, headRef? }`
 
 #### 验收标准
-- [ ] local 范围正确解析 Git diff
-- [ ] staged 范围正确读取暂存区
-- [ ] scan 范围正确校验路径
-- [ ] 越界路径返回 2603
-- [ ] 对应测试绿灯
+- [x] local 范围正确解析 Git diff
+- [x] staged 范围正确读取暂存区
+- [x] scan 范围正确校验路径
+- [x] 越界路径返回 2603
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地分支审查、暂存区审查、目录扫描审查）
@@ -334,7 +334,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `resolveLocalRange()` 和 `resolveStagedRange()` 函数，通过 Git 获取分支 diff 与暂存区文件。
@@ -359,10 +359,10 @@
 4. 返回 `{ baseRef, headRef, files }`
 
 #### 验收标准
-- [ ] local 范围正确获取 base/head 引用
-- [ ] staged 范围正确获取暂存区文件
-- [ ] Git 不可用时返回可操作错误
-- [ ] 对应测试绿灯
+- [x] local 范围正确获取 base/head 引用
+- [x] staged 范围正确获取暂存区文件
+- [x] Git 不可用时返回可操作错误
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（本地分支审查、暂存区审查）
@@ -374,7 +374,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `buildReviewContext()` 函数，根据 scope 构建 diff、文件片段和必要上下文，并过滤敏感内容。
@@ -396,10 +396,10 @@
 3. 上下文写入 `.harness/cache/review/<runId>/context.json`（临时，命令结束后可清理）
 
 #### 验收标准
-- [ ] 正确读取 scope 内文件
-- [ ] 敏感文件内容被过滤
-- [ ] 包含 module map 和 rules
-- [ ] 对应测试绿灯
+- [x] 正确读取 scope 内文件
+- [x] 敏感文件内容被过滤
+- [x] 包含 module map 和 rules
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§5.2 数据安全
@@ -411,7 +411,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-04, TASK-RV-05, TASK-RV-06
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planReviewers()` 和 `runReviewers()` 函数，按 full/lite/文件数量选择 reviewer 并并行执行。
@@ -438,11 +438,11 @@
    - agent 不可用时降级为单进程 lite 审查
 
 #### 验收标准
-- [ ] full 模式选择完整 reviewer 集合
-- [ ] lite 模式选择轻量 reviewer
-- [ ] 并行执行且失败隔离
-- [ ] agent 不可用时降级
-- [ ] 对应测试绿灯
+- [x] full 模式选择完整 reviewer 集合
+- [x] lite 模式选择轻量 reviewer
+- [x] 并行执行且失败隔离
+- [x] agent 不可用时降级
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（标准审查流程）
@@ -454,7 +454,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-07
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `normalizeFinding()` 函数，归一化 reviewer 输出为统一 finding schema。
@@ -475,10 +475,10 @@
    - 生成 semanticFingerprint（用于去重）
 
 #### 验收标准
-- [ ] 正确归一化 reviewer 输出
-- [ ] 缺少必填字段时返回 null
-- [ ] 生成 semanticFingerprint
-- [ ] 对应测试绿灯
+- [x] 正确归一化 reviewer 输出
+- [x] 缺少必填字段时返回 null
+- [x] 生成 semanticFingerprint
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（多 agent 审查与 finding 验证）
@@ -490,7 +490,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-08
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `validateFindings()`、`filterByConfidence()` 和 `dedupeFindings()` 函数。
@@ -521,12 +521,12 @@
    - 记录 deduplicated 统计
 
 #### 验收标准
-- [ ] validator 正确复核 finding
-- [ ] confidence < 80 被丢弃
-- [ ] validator rejected 被丢弃
-- [ ] 去重保留最高严重度/置信度
-- [ ] 统计正确记录
-- [ ] 对应测试绿灯
+- [x] validator 正确复核 finding
+- [x] confidence < 80 被丢弃
+- [x] validator rejected 被丢弃
+- [x] 去重保留最高严重度/置信度
+- [x] 统计正确记录
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（低置信 finding）
@@ -538,7 +538,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `planMechanicalFixes()` 和 `applyMechanicalFixes()` 函数，处理低风险机械修复。
@@ -566,12 +566,12 @@
    - 只能修改审查范围内文件
 
 #### 验收标准
-- [ ] `--no-fix` 时不调用修复
-- [ ] 只修复低风险机械问题
-- [ ] P0/P1 不自动修复
-- [ ] 修复通过 transaction 写入
-- [ ] 失败时回滚
-- [ ] 对应测试绿灯
+- [x] `--no-fix` 时不调用修复
+- [x] 只修复低风险机械问题
+- [x] P0/P1 不自动修复
+- [x] 修复通过 transaction 写入
+- [x] 失败时回滚
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（只报告不修复、允许自动修复）
@@ -583,7 +583,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-09
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `writeReviewReports()` 和 `postRemoteComments()` 函数。
@@ -613,11 +613,11 @@
    - 过滤本地绝对私密路径
 
 #### 验收标准
-- [ ] Markdown + JSON 双报告写入
-- [ ] JSON 报告包含 schemaVersion
-- [ ] 写入失败返回 2605
-- [ ] 远程评论失败时本地报告仍保留
-- [ ] 对应测试绿灯
+- [x] Markdown + JSON 双报告写入
+- [x] JSON 报告包含 schemaVersion
+- [x] 写入失败返回 2605
+- [x] 远程评论失败时本地报告仍保留
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 场景（报告与修复策略）
@@ -629,7 +629,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-RV-10, TASK-RV-11
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 实现 `runReviewCommand()` 函数，串联 review pipeline 并输出结果。
@@ -661,11 +661,11 @@
    - 否则返回成功
 
 #### 验收标准
-- [ ] 完整 pipeline 正确执行
-- [ ] P0 finding 返回 2601
-- [ ] `--no-fix` 不修改源码
-- [ ] `--fix` 只修复机械问题
-- [ ] 对应测试绿灯
+- [x] 完整 pipeline 正确执行
+- [x] P0 finding 返回 2601
+- [x] `--no-fix` 不修改源码
+- [x] `--fix` 只修复机械问题
+- [x] 对应测试绿灯
 
 #### 关联设计
 - spec.md 章节：§1 所有需求项
@@ -677,7 +677,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-RV-12
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 #### 任务描述
 编写并运行集成测试，验证 review 端到端流程。
@@ -703,10 +703,10 @@
 3. 运行全部测试、tsc、lint
 
 #### 验收标准
-- [ ] 所有集成测试通过
-- [ ] 所有单元测试通过
-- [ ] `npx tsc --noEmit` 无错误
-- [ ] lint 无错误
+- [x] 所有集成测试通过
+- [x] 所有单元测试通过
+- [x] `npx tsc --noEmit` 无错误
+- [x] lint 无错误
 
 #### 关联设计
 - spec.md 章节：§1 所有场景
@@ -745,11 +745,11 @@
 
 ### 4.3 手动验证清单
 
-- [ ] `harness review --local --json` 输出合法 JSON
-- [ ] `harness review --staged` 审查暂存区
-- [ ] `harness review --scan src --no-fix` 只报告
-- [ ] `harness review --fix` 只修复机械问题
-- [ ] 报告存在于 `.harness/reports/review/`
+- [x] `harness review --local --json` 输出合法 JSON
+- [x] `harness review --staged` 审查暂存区
+- [x] `harness review --scan src --no-fix` 只报告
+- [x] `harness review --fix` 只修复机械问题
+- [x] 报告存在于 `.harness/reports/review/`
 
 ---
 
@@ -820,9 +820,9 @@
 
 ### 7.3 文档更新
 
-- [ ] README 更新（review 命令说明）
-- [ ] 接口文档更新
-- [ ] 变更日志更新
+- [x] README 更新（review 命令说明）
+- [x] 接口文档更新
+- [x] 变更日志更新
 
 ---
 
