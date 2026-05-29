@@ -23,7 +23,7 @@
 
 - 生成 5 个 Hook 脚本（遵循四条原则）
 - 生成 Hook 配置文件（Claude settings.json、Codex hooks.json）
-- 生成 22 个 Subagent 定义文件（需求分析 4 + 设计 4 + 代码生成 4 + review 7，Claude .md + Codex .toml）
+- 生成 19 个 Subagent 定义文件（需求分析 4 + 设计 4 + 代码生成 4 + review 7，Claude .md + Codex .toml）
 - 替换阻断列表为需求文档定义的 6 个命令
 - 在 `src/cli/main.ts` 集成 dangerous-command CLI 拦截
 
@@ -122,7 +122,7 @@
 - **状态**: [x] 已完成
 
 #### 任务描述
-为 22 个 Subagent 定义文件生成创建测试骨架。
+为 19 个 Subagent 定义文件生成创建测试骨架。
 
 #### 输入
 - `generateSubagentDefs()` 函数签名
@@ -219,31 +219,31 @@
 
 ---
 
-### [TASK-SO-05] 实现 22 个 Subagent 定义文件生成
+### [TASK-SO-05] 实现 19 个 Subagent 定义文件生成
 
 - **类型**: 接口层
 - **依赖**: TASK-SO-02
 - **状态**: [x] 已完成
 
 #### 任务描述
-在 `safety/command.ts` 中实现 `generateSubagentDefs()` 生成 22 个 Subagent 定义文件。
+在 `safety/command.ts` 中实现 `generateSubagentDefs()` 生成 19 个 Subagent 定义文件。
 
 #### 输入
 - Subagent 清单（4+4+4+7）
 
 #### 输出
-- 44 个文件（Claude .md × 22 + Codex .toml × 22）
+- 38 个文件（Claude .md × 19 + Codex .toml × 19）
 
 #### 实现步骤
-1. 定义 22 个 agent 清单（名称+类别），注意代码生成类别使用 `harness-impl-contract-validator`（避免与设计类别的 `harness-contract-validator` 重名）
+1. 定义 19 个 agent 清单（名称+类别），注意代码生成类别使用 `harness-impl-contract-validator`（避免与设计类别的 `harness-contract-validator` 重名）
 2. 实现 `generateAgentMarkdown(agent)` 生成 Claude .md 格式
 3. 实现 `generateAgentToml(agent)` 生成 Codex .toml 格式
 4. 写入 `.harness/adapters/claude/agents/<name>.md`
 5. 写入 `.harness/adapters/codex/agents/<name>.toml`
 
 #### 验收标准
-- [ ] 22 个 Claude .md 文件生成
-- [ ] 22 个 Codex .toml 文件生成
+- [ ] 19 个 Claude .md 文件生成
+- [ ] 19 个 Codex .toml 文件生成
 - [ ] 文件格式正确
 - [ ] TASK-SO-02 测试通过
 
@@ -325,7 +325,7 @@
 | 任务 ID | 测试类型 | 测试场景 | 断言内容 |
 |--------|---------|---------|---------|
 | TASK-SO-01 | Hook 生成 | 5 脚本×2 路径+配置+四条原则 | 文件存在、内容正确 |
-| TASK-SO-02 | Subagent | 22 agent×2 格式 | 文件存在、格式正确 |
+| TASK-SO-02 | Subagent | 19 agent×2 格式 | 文件存在、格式正确 |
 | TASK-SO-03 | CLI 拦截 | 6 个阻断+放行+开关 | 错误码 2801 |
 
 ### 4.2 集成测试场景
@@ -334,7 +334,7 @@
 |-----|---------|---------|---------|
 | Hook 安装 | 初始化完成 | 检查 .harness/adapters/ | Hook 脚本存在 |
 | 危险命令阻断 | safety 启用 | 执行 rm -rf | 返回 2801 |
-| Subagent 生成 | 初始化完成 | 检查 agents/ | 22 个定义文件存在 |
+| Subagent 生成 | 初始化完成 | 检查 agents/ | 19 个定义文件存在 |
 
 ### 4.3 手动验证清单
 

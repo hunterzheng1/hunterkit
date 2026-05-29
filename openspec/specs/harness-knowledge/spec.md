@@ -1,10 +1,8 @@
-# spec.md - 能力规格定义
+# spec.md - 能力规格定义（增量）
 
-> **定位**：单个能力（capability）的技术规格定义，用于 `specs/<capability>/spec.md`
->
-> **【质量红线】严禁描述模糊；约束必须量化；缺失必要参数时 opsx-check 必须报错拦截
->
->> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+> **定位**：`harness-knowledge` 的实施偏移修复规格
+> **【质量红线】严禁描述模糊；约束必须量化
+> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
 
 ---
 
@@ -12,41 +10,77 @@
 
 ### 新增需求
 
-#### 需求项：本地知识索引
+无。
 
-系统必须通过 `harness knowledge --index` 将历史 specs、ADR、rules、reports 和 archive 文档索引到本地 SQLite FTS5 数据库。
+### 修改需求
+
+#### 需求项：迁移到 SQLite FTS5
+
+系统必须将 knowledge 命令从 JSON 文件迁移到 SQLite FTS5。
 
 ##### 场景：首次索引
 - **当** 用户执行 `harness knowledge --index`
-- **预期** 系统必须扫描 `.harness/develop`、`.harness/docs`、`.harness/rules`、`.harness/reports`、`openspec/changes/**/archive` 等知识来源，并写入 `.harness/cache/knowledge.sqlite`
+- **预期** 系统必须扫描 `.harness/develop`、`.harness/docs`、`.harness/rules`、`.harness/reports`、`openspec/changes/**/archive` 等知识来源，并写入 `.harness/cache/knowledge.sqlite`（SQLite FTS5 格式）
+
+##### 场景：SQLite FTS5 不可用
+- **当** 本地 SQLite 不支持 FTS5
+- **预期** 系统必须返回错误码 2704 并提示 SQLite FTS 不可用
+
+#### 需求项：`--index` 索引构建/刷新
+
+系统必须实现 `--index` 参数，支持建立或刷新本地知识库。
+
+##### 场景：构建索引
+- **当** 用户执行 `harness knowledge --index`
+- **预期** 系统必须扫描配置允许的知识来源路径，索引 openspec archive、ADR、rules、reports，并写入 `knowledge.sqlite`
 
 ##### 场景：增量索引
 - **当** 用户重复执行 `harness knowledge --index`
 - **预期** 系统必须根据文件路径、mtime 和内容 hash 只更新发生变化的文档记录
 
-#### 需求项：知识检索
+##### 场景：索引来源无效
+- **当** 配置的知识来源路径越界或不存在
+- **预期** 系统必须返回错误码 2703 并提示索引来源无效
 
-系统必须通过 `harness knowledge --search <query>` 返回带 source path、片段、类型和相关度分数的检索结果。
+#### 需求项：`--search` 搜索
+
+系统必须实现 `--search` 参数，支持搜索知识库。
 
 ##### 场景：关键词检索
 - **当** 用户执行 `harness knowledge --search "文档防腐" --json`
-- **预期** 系统必须返回最多 20 条结果，每条结果必须包含 `sourcePath`、`title`、`kind`、`snippet`、`score`
+- **预期** 系统必须返回最多 20 条结果（可通过 `--limit` 调整），每条结果必须包含 `sourcePath`、`title`、`kind`、`snippet`、`score`
 
 ##### 场景：无索引检索
 - **当** 用户在知识库不存在时执行 `--search`
-- **预期** 系统必须提示先执行 `harness knowledge --index`，并返回明确错误码
+- **预期** 系统必须提示先执行 `harness knowledge --index`，并返回错误码 2702
 
-#### 需求项：本地与隐私边界
+##### 场景：查询参数无效
+- **当** 用户执行 `harness knowledge --search ""`
+- **预期** 系统必须返回错误码 2701 并提示查询参数为空
 
-系统必须保证第一版知识库只使用本地 SQLite FTS5，不调用远程向量库或外部知识库服务。
+#### 需求项：搜索结果带 source path/snippet/score
 
-##### 场景：存在本地私有配置
-- **当** `.harness/config/knowledge.config.json` 或 `*.local.json` 配置远程服务
-- **预期** 第一版 `knowledge` 命令必须忽略远程服务配置，并在报告中说明当前只支持本地 FTS5
+系统必须在搜索结果中包含 source path、snippet 和 score。
 
-### 修改需求
+##### 场景：结果结构
+- **当** 搜索返回结果
+- **预期** 每条结果必须包含 `sourcePath`（文件路径）、`title`（文档标题）、`kind`（文档类型：spec/design/tasks/report/rule）、`snippet`（匹配片段，高亮关键词）、`score`（相关度分数，FTS5 rank）
 
-无。
+##### 场景：结果排序
+- **当** 搜索返回多条结果
+- **预期** 系统必须按 `score` 降序排列，最高相关度在前
+
+#### 需求项：增量索引
+
+系统必须支持增量索引，只更新变化的文档。
+
+##### 场景：增量更新
+- **当** 用户重复执行 `harness knowledge --index`
+- **预期** 系统必须根据文件路径、mtime 和内容 hash 判断变化，只更新变化的文档记录，未变化的文档必须跳过
+
+##### 场景：删除文档处理
+- **当** 已索引文档被删除
+- **预期** 系统必须在下次索引时从 `knowledge.sqlite` 中删除对应记录
 
 ### 移除需求
 
@@ -96,17 +130,6 @@
 }
 ```
 
-**错误响应**
-```json
-{
-  "code": 2702,
-  "msg": "knowledge index missing",
-  "data": {
-    "indexPath": ".harness/cache/knowledge.sqlite"
-  }
-}
-```
-
 #### 错误码定义
 | 错误码 | 含义 | 触发条件 |
 |-------|------|----------|
@@ -123,20 +146,18 @@
 ### 3.1 性能约束
 | 指标 | 约束值 | 说明 |
 |------|-------|------|
-| 首次索引时间 | < 60000 毫秒 (P95) | 文档数小于 5000 |
-| 增量索引时间 | < 10000 毫秒 (P95) | 变更文档数小于 200 |
-| 搜索响应时间 | < 1000 毫秒 (P95) | 索引文档数小于 50000 |
+| 首次索引时间 | < 60000 毫秒 (P95) | 文档数 < 5000 |
+| 增量索引时间 | < 10000 毫秒 (P95) | 变更文档数 < 200 |
+| 搜索响应时间 | < 1000 毫秒 (P95) | 索引文档数 < 50000 |
 
 ### 3.2 资源约束
 | 资源 | 限制 | 说明 |
 |------|------|------|
-| 内存 | < 512 MB | 索引文档总量小于 500 MB |
+| 内存 | < 512 MB | 索引文档总量 < 500 MB |
 | CPU | 平均 < 85% | 索引期间 |
 | 存储 | < 1 GB | `.harness/cache/knowledge.sqlite` 上限 |
 
 ### 3.3 超时配置
-- 连接超时：0 毫秒，第一版不建立网络连接
-- 读取超时：60000 毫秒
 - 总超时：300000 毫秒
 
 ---
@@ -144,10 +165,8 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `harness-workspace-config`：读取 cache 路径和 knowledge 配置
-- [ ] `harness-develop`：索引 proposal/spec/design/tasks/archive
-- [ ] `harness-sync`：索引 rules 和文档同步报告
-- [ ] `harness-review`：索引审查报告和 finding 摘要
+- [ ] `src/capabilities/knowledge/command.ts`：迁移到 SQLite FTS5、实现 `--index` 索引构建/刷新、实现 `--search`
+- [ ] `src/core/legacy-sources.ts`：兼容读取旧目录（`openspec/changes/**/archive`、`.kld-review/`、`.docsync/`）作为只读索引来源
 
 ### 4.2 外部依赖
 
@@ -171,12 +190,10 @@
 - 授权范围：只读取配置允许的知识来源路径，默认不读取 secretPatterns 命中文件
 
 ### 5.2 数据安全
-- 敏感字段：token、secret、私钥、证书、本地连接配置
-- 加密要求：knowledge.sqlite 不加密；因此必须禁止索引敏感文件内容
+- 敏感字段：knowledge.sqlite 不加密；因此必须禁止索引敏感文件内容
 
 ### 5.3 审计要求
 - 日志记录：索引来源、文件数量、跳过数量、数据库路径、搜索查询长度
-- 操作追踪：索引结果必须记录每个 sourcePath 的 hash 和 indexedAt
 
 ---
 
@@ -193,10 +210,9 @@
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景
-> - [x] 使用「必须」强制要求，而非「应该」「可以」
-> - [x] 所有接口参数已量化（类型、必填、范围、示例）
-> - [x] 物理约束已量化（并发、超时、性能指标）
+> - [x] 每个需求项至少有一个场景（5 个需求项，11 个场景）
+> - [x] 使用「必须」强制要求
+> - [x] 所有接口参数已量化
+> - [x] 物理约束已量化
 > - [x] 错误码已定义
-> - [x] **技术选型已包含版本信息**（框架、数据库、缓存、中间件等）
-> - [x] 若跳过 proposal.md，影响范围已在此补齐
+> - [x] 技术选型已包含版本信息

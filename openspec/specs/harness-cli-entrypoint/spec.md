@@ -1,10 +1,8 @@
-# spec.md - 能力规格定义
+# spec.md - 能力规格定义（增量）
 
-> **定位**：单个能力（capability）的技术规格定义，用于 `specs/<capability>/spec.md`
->
-> **【质量红线】严禁描述模糊；约束必须量化；缺失必要参数时 opsx-check 必须报错拦截
->
->> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+> **定位**：`harness-cli-entrypoint` 的实施偏移修复规格
+> **【质量红线】严禁描述模糊；约束必须量化
+> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
 
 ---
 
@@ -12,49 +10,73 @@
 
 ### 新增需求
 
-#### 需求项：统一 CLI 入口
-
-系统必须提供单一用户入口 `npx @hunterzheng/harness` 与本地命令 `harness`，并将所有日常能力收敛到 `inspect`、`sync`、`develop`、`review`、`knowledge`、`status`、`doctor`、`config` 八个顶层命令。
-
-##### 场景：首次运行进入初始化向导
-- **当** 用户在未初始化的目标项目中执行 `npx @hunterzheng/harness`
-- **预期** 系统必须进入交互式初始化向导，并要求用户选择目标项目、AI 工具、能力集、项目类型、写入策略与 Hook 强度
-
-##### 场景：已初始化项目进入操作菜单
-- **当** 用户在已存在 `.harness/config/harness.config.json` 的项目中执行 `npx @hunterzheng/harness`
-- **预期** 系统必须进入交互式操作菜单，并展示可执行的 Harness 命令列表
-
-##### 场景：直接执行功能命令
-- **当** 用户执行 `harness inspect`、`harness sync`、`harness review` 等已注册命令
-- **预期** 系统必须路由到对应 capability，并禁止暴露 DocSync、GSD、kld-sdd、kld-review 作为用户命令名
-
-#### 需求项：命令参数与输出契约
-
-系统必须为所有顶层命令提供一致的参数解析、退出码、JSON 输出与人类可读摘要，供 CLI、Skill、Hook、CI 共享。
-
-##### 场景：机器可读输出
-- **当** 用户或自动化系统传入 `--json`
-- **预期** 系统必须输出包含 `code`、`msg`、`data`、`warnings`、`artifacts` 的 JSON，且不得混入非 JSON 文本
-
-##### 场景：命令失败
-- **当** 参数非法、工作区缺失、依赖不可用或执行失败
-- **预期** 系统必须返回非 0 退出码，并在 JSON 或摘要中给出错误码、错误消息和可操作的修复建议
-
-#### 需求项：全局上下文参数
-
-系统必须支持 `--cwd`、`--dry-run`、`--json`、`--no-color` 四个全局参数，并在所有命令中保持相同语义。
-
-##### 场景：指定目标项目
-- **当** 用户执行 `harness status --cwd <path> --json`
-- **预期** 系统必须以 `<path>` 作为项目根目录解析 `.harness/`，并在输出中返回规范化后的绝对路径
-
-##### 场景：预览模式
-- **当** 用户执行任意会写文件的命令并传入 `--dry-run`
-- **预期** 系统必须只输出计划、diff 摘要或报告预览，且写入文件数量必须为 0
+无。
 
 ### 修改需求
 
-无。
+#### 需求项：交互式初始化向导（6 步问题）
+
+系统必须在未初始化项目中执行 `npx @hunterzheng/harness` 时进入完整的 6 步交互式向导，而非 stub 实现。
+
+##### 场景：向导步骤 1 - 确认目标项目
+- **当** 用户启动向导
+- **预期** 系统必须展示当前目录作为默认目标项目，并允许用户指定其他路径；路径必须解析为存在的目录
+
+##### 场景：向导步骤 2 - 选择 AI 工具
+- **当** 用户进入步骤 2
+- **预期** 系统必须提供 `Claude Code`、`Codex`、`两者`、`暂不安装` 四个选项，并将选择写入 `harness.config.json` 的 `aiTools` 字段
+
+##### 场景：向导步骤 3 - 选择工作流能力
+- **当** 用户进入步骤 3
+- **预期** 系统必须提供 `基础文档`、`功能开发`、`代码审查`、`知识库`、`全部` 五个选项，并将选择写入 `capabilities` 字段
+
+##### 场景：向导步骤 4 - 选择项目类型
+- **当** 用户进入步骤 4
+- **预期** 系统必须自动检测项目类型（Node/Java/混合），并允许用户覆盖；检测结果必须写入 `project.type`
+
+##### 场景：向导步骤 5 - 选择写入策略
+- **当** 用户进入步骤 5
+- **预期** 系统必须提供 `只预览`、`写入项目配置` 两个选项；选择 `只预览` 时等价于 `--dry-run`
+
+##### 场景：向导步骤 6 - 选择 Hook 强度
+- **当** 用户进入步骤 6
+- **预期** 系统必须提供 `不安装`、`仅危险命令阻断`、`完整质量门` 三个选项，并将选择写入 `safety` 配置
+
+##### 场景：向导完成后生成产物
+- **当** 用户完成全部 6 步向导
+- **预期** 系统必须生成 `AGENTS.md`、`CLAUDE.md`（若选择 Claude）、Skill 投影文件，并创建 `.harness/` 工作区目录结构
+
+#### 需求项：已初始化项目操作菜单
+
+系统必须在已初始化项目中执行 `npx @hunterzheng/harness`（无参数）时进入交互式操作菜单。
+
+##### 场景：展示操作菜单
+- **当** 用户在已存在 `.harness/config/harness.config.json` 的项目中无参数执行
+- **预期** 系统必须展示可执行的 Harness 命令列表（inspect/sync/develop/review/knowledge/status/doctor/config），并允许用户选择执行
+
+##### 场景：菜单选择执行命令
+- **当** 用户在操作菜单中选择某个命令
+- **预期** 系统必须路由到对应 capability 执行，并展示执行结果
+
+#### 需求项：命令级 `--json` 格式化输出
+
+系统必须为每个命令提供命令级 `--json` 格式化输出，确保 stdout 为合法 JSON。
+
+##### 场景：inspect JSON 输出
+- **当** 用户执行 `harness inspect --json`
+- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `factsPath`、`moduleMapPath`、`scope`）的 JSON，且 stdout 不得混入非 JSON 文本
+
+##### 场景：sync JSON 输出
+- **当** 用户执行 `harness sync --check --json`
+- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `mode`、`drift`、`documents`、`reportPath`）的 JSON
+
+##### 场景：review JSON 输出
+- **当** 用户执行 `harness review --local --no-fix --json`
+- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `scope`、`findings`、`summary`、`reports`）的 JSON
+
+##### 场景：knowledge JSON 输出
+- **当** 用户执行 `harness knowledge --search "关键词" --json`
+- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `results` 数组，每条含 `sourcePath`、`title`、`kind`、`snippet`、`score`）的 JSON
 
 ### 移除需求
 
@@ -67,57 +89,37 @@
 ### 2.1 接口定义
 
 #### 接口基本信息
-- **路径**：`CLI: npx @hunterzheng/harness` / `CLI: harness`
+- **路径**：`CLI: npx @hunterzheng/harness`（无参数）
 - **方法**：本地进程调用
-- **内容类型**：终端文本；`--json` 时为 `application/json`
+- **内容类型**：交互式终端文本
 
 #### 请求参数
 
 | 参数名 | 类型 | 必填 | 说明 | 示例值 | 约束条件 |
 |-------|------|------|------|--------|----------|
-| command | string | 否 | 顶层命令名 | `inspect` | 枚举：`inspect`、`sync`、`develop`、`review`、`knowledge`、`status`、`doctor`、`config`；为空时进入向导或菜单 |
-| --cwd | path | 否 | 目标项目根目录 | `E:/repo/demo` | 必须解析为存在的目录；默认当前工作目录 |
-| --dry-run | boolean | 否 | 预览模式 | `true` | 默认 `false`；为 `true` 时禁止实际写文件 |
-| --json | boolean | 否 | JSON 输出 | `true` | 默认 `false`；为 `true` 时 stdout 必须是合法 JSON |
-| --no-color | boolean | 否 | 禁用 ANSI 颜色 | `true` | 默认 `false`；CI 环境可强制启用 |
+| (无参数) | - | - | 未初始化→向导；已初始化→菜单 | - | 自动检测 `.harness/config/harness.config.json` |
 
-#### 响应结构
+#### 向导数据结构
 
-**成功响应 (0)**
 ```json
 {
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "command": "status",
-    "cwd": "E:/repo/demo",
-    "status": "ok",
-    "artifacts": []
-  },
-  "warnings": []
-}
-```
-
-**错误响应**
-```json
-{
-  "code": 1001,
-  "msg": "invalid command",
-  "data": null,
-  "warnings": [
-    "Run `harness doctor` to inspect the local setup."
-  ]
+  "wizardAnswers": {
+    "projectPath": "E:/repo/demo",
+    "aiTools": ["claude", "codex"],
+    "capabilities": ["inspect", "sync", "develop", "review", "knowledge"],
+    "projectType": "node",
+    "writeStrategy": "write",
+    "hookStrength": "full"
+  }
 }
 ```
 
 #### 错误码定义
 | 错误码 | 含义 | 触发条件 |
 |-------|------|----------|
-| 1001 | 参数错误 | command 不在允许枚举内或参数格式非法 |
-| 1002 | 路径错误 | `--cwd` 不存在或不可访问 |
-| 2001 | 未初始化 | 命令要求 `.harness/`，但项目未初始化 |
-| 4001 | 外部依赖不可用 | Git、Node、OpenSpec、SQLite 等依赖检查失败 |
-| 5001 | 未知执行错误 | 未被细分的内部异常 |
+| 1003 | 向导中断 | 用户在向导过程中 Ctrl+C |
+| 1004 | 向导输入无效 | 用户输入不在允许选项内 |
+| 2002 | 菜单选择无效 | 操作菜单中选择未注册命令 |
 
 ---
 
@@ -126,59 +128,51 @@
 ### 3.1 性能约束
 | 指标 | 约束值 | 说明 |
 |------|-------|------|
-| 冷启动响应时间 | < 1500 毫秒 (P95) | `status`、`doctor`、无写入命令 |
-| 向导首屏时间 | < 2000 毫秒 (P95) | 首次 `npx` 或已初始化菜单 |
-| JSON 序列化时间 | < 200 毫秒 (P95) | 输出对象小于 1 MB |
+| 向导首屏渲染 | < 500 毫秒 (P95) | 单个问题渲染 |
+| 菜单渲染 | < 300 毫秒 (P95) | 命令列表渲染 |
+| 向导完成后产物生成 | < 5000 毫秒 (P95) | 不含用户交互时间 |
 
 ### 3.2 资源约束
 | 资源 | 限制 | 说明 |
 |------|------|------|
-| 内存 | < 256 MB | 普通命令，不含全量 review |
-| CPU | 单进程平均 < 80% | 5 秒窗口内 |
-| 存储 | < 10 MB | CLI 入口自身新增持久文件，不含报告和 cache |
+| 内存 | < 128 MB | 向导/菜单交互 |
 
 ### 3.3 超时配置
-- 连接超时：0 毫秒，本地 CLI 不建立网络连接
-- 读取超时：30000 毫秒
-- 总超时：120000 毫秒，交互式等待用户输入不计入执行超时
+- 用户交互超时：无限制（等待用户输入）
+- 产物生成超时：30000 毫秒
 
 ---
 
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `harness-workspace-config`：读取初始化状态、配置和项目根目录
-- [ ] `harness-safety-orchestration`：应用 dry-run、危险动作和退出码策略
-- [ ] 各 capability registry：根据 command 路由到具体能力
+- [ ] `src/cli/interactive.ts`：实现 `runInitWizard()` 和 `runOperationMenu()`
+- [ ] `src/cli/global-options.ts`：扩展命令级 `--json` 格式化输出
+- [ ] `src/cli/main.ts`：初始化时调用文档生成和 Skill 投影安装
 
 ### 4.2 外部依赖
 
 | 组件类型 | 组件名称 | 版本 | 用途 | 降级策略 |
 |---------|---------|------|------|---------|
-| 运行时 | Node.js | >= 20.0.0 | 执行 CLI | 阻断执行并提示安装 |
-| 包管理器 | npm | >= 10.0.0 | `npx @hunterzheng/harness` 分发 | 提示使用本地 `node dist/cli.js` |
-| 语言 | TypeScript | >= 5.0.0 | 开发与类型检查 | 不影响已构建产物运行 |
-| 版本控制 | Git | >= 2.30.0 | status、inspect、review 范围解析 | 允许非 Git 项目运行基础初始化 |
+| 交互库 | @inquirer/prompts | >= 5.0.0 | 向导问题和菜单选择 | 降级为命令行参数模式 |
 
 ### 4.3 数据存储
-- [ ] 配置文件（JSON）：`.harness/config/harness.config.json`，读写初始化状态和能力开关
-- [ ] 状态文件（JSON）：`.harness/state/install.json`，记录安装来源、版本和 adapter 状态
+- [ ] JSON 配置：`.harness/config/harness.config.json`，写入向导选择结果
 
 ---
 
 ## 5. 安全与合规
 
 ### 5.1 权限要求
-- 认证方式：本地用户权限，不引入远程账号认证
-- 授权范围：默认只读项目；写入命令必须经过命令语义、配置和 `--dry-run` 状态检查
+- 认证方式：本地用户权限
+- 授权范围：向导写入 `.harness/` 和平台投影路径
 
 ### 5.2 数据安全
-- 敏感字段：`.env`、`.env.*`、`*.pem`、`*.key`、`*.p12`、`*.jks`、`*token*`、`*secret*`
-- 加密要求：CLI 不加密项目文件；必须避免读取、输出或打包敏感文件
+- 敏感字段：向导过程中不得读取或输出 `.env*`、`*.pem` 等敏感文件
+- 加密要求：无
 
 ### 5.3 审计要求
-- 日志记录：命令名、cwd、开始时间、结束时间、退出码、产物路径
-- 操作追踪：写入命令必须记录 dry-run 状态、写入文件列表和报告路径
+- 日志记录：向导步骤、用户选择、产物生成路径
 
 ---
 
@@ -186,19 +180,18 @@
 
 ### 6.1 接口兼容性
 - 是否向后兼容：是
-- 版本控制策略：新增顶层命令必须保持旧命令语义；破坏性变更必须提升 CLI 主版本
+- 版本控制策略：向导问题顺序和选项必须保持稳定
 
 ### 6.2 数据兼容性
-- 数据迁移方案：未初始化项目新建 `.harness/`；已有旧目录只作为兼容读取来源
-- 回滚策略：初始化写入必须由 transaction 记录文件列表，失败时回滚本次写入
+- 数据迁移方案：无
+- 回滚策略：向导产物生成通过 transaction 回滚
 
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景
-> - [x] 使用「必须」强制要求，而非「应该」「可以」
-> - [x] 所有接口参数已量化（类型、必填、范围、示例）
-> - [x] 物理约束已量化（并发、超时、性能指标）
+> - [x] 每个需求项至少有一个场景（3 个需求项，13 个场景）
+> - [x] 使用「必须」强制要求
+> - [x] 所有接口参数已量化
+> - [x] 物理约束已量化
 > - [x] 错误码已定义
-> - [x] **技术选型已包含版本信息**（框架、数据库、缓存、中间件等）
-> - [x] 若跳过 proposal.md，影响范围已在此补齐
+> - [x] 技术选型已包含版本信息

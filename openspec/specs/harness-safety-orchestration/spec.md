@@ -1,10 +1,8 @@
-# spec.md - 能力规格定义
+# spec.md - 能力规格定义（增量）
 
-> **定位**：单个能力（capability）的技术规格定义，用于 `specs/<capability>/spec.md`
->
-> **【质量红线】严禁描述模糊；约束必须量化；缺失必要参数时 opsx-check 必须报错拦截
->
->> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+> **定位**：`harness-safety-orchestration` 的实施偏移修复规格
+> **【质量红线】严禁描述模糊；约束必须量化
+> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
 
 ---
 
@@ -12,45 +10,81 @@
 
 ### 新增需求
 
-#### 需求项：危险命令与敏感文件防护
-
-系统必须提供确定性安全策略，默认阻断危险命令，并禁止读取、输出或发布敏感文件内容。
-
-##### 场景：危险命令阻断
-- **当** AI 工具或 Hook 请求执行 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
-- **预期** 系统必须阻断执行，并返回安全策略命中项和修复建议
-
-##### 场景：敏感文件过滤
-- **当** inspect、sync、review 或 knowledge 扫描项目文件
-- **预期** 系统必须跳过 `.env`、`.env.*`、`*.pem`、`*.key`、`*.p12`、`*.jks`、`*token*`、`*secret*` 等敏感模式
-
-#### 需求项：Subagent 编排边界
-
-系统必须只在需求复杂、范围较大或任务可独立拆分时启用 subagent，并禁止多个 agent 同时修改同一共享文件。
-
-##### 场景：并行审查
-- **当** review 范围超过 3 个文件或用户传入 `--full`
-- **预期** 系统必须允许多个 reviewer 并行读取相关上下文，并由 validator 复核 finding
-
-##### 场景：并行实现
-- **当** apply 阶段任务 DAG 中存在无依赖任务组
-- **预期** 系统必须只并行分发互不依赖且文件范围不重叠的任务，共享文件修改必须回到主流程串行处理
-
-#### 需求项：Hook 与事件审计
-
-系统必须支持 dangerous-command、sync-after-doc-change、review-before-push、session-summary、compact-state 等 Hook，并将关键事件写入 `.harness/events/` 或 `.harness/reports/`。
-
-##### 场景：push 前审查门禁
-- **当** AI 工具尝试执行 `git push`
-- **预期** 系统必须检查最近 review 状态；若未运行 review 或存在 P0 finding，必须阻断 push 并提示运行 `harness review`
-
-##### 场景：会话结束记录
-- **当** AI session 结束或触发 compact-state
-- **预期** 系统必须记录 active change、pending checks、关键产物路径和未完成事项
+无。
 
 ### 修改需求
 
-无。
+#### 需求项：5 个 Hook 脚本生成
+
+系统必须生成 5 个 Hook 脚本：dangerous-command、sync-after-doc-change、review-before-push、session-summary、compact-state。Hook 实现必须遵循四条原则：不做复杂 AI 判断、输出必须结构化、不直接修代码、只调用 `harness` CLI 或小脚本。
+
+##### 场景：生成 dangerous-command Hook
+- **当** 用户选择安装 Hook（向导步骤 6 选择"仅危险命令阻断"或"完整质量门"）
+- **预期** 系统必须生成 `.harness/adapters/claude/hooks/dangerous-command.sh` 和 `.harness/adapters/codex/hooks/dangerous-command.sh`，阻断 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
+
+##### 场景：生成 sync-after-doc-change Hook
+- **当** 用户选择"完整质量门"
+- **预期** 系统必须生成 `.harness/adapters/claude/hooks/sync-after-doc-change.sh` 和 `.harness/adapters/codex/hooks/sync-after-doc-change.sh`，修改核心 docs 后提示或运行 `harness sync --check`
+
+##### 场景：生成 review-before-push Hook
+- **当** 用户选择"完整质量门"
+- **预期** 系统必须生成 `.harness/adapters/claude/hooks/review-before-push.sh` 和 `.harness/adapters/codex/hooks/review-before-push.sh`，若未运行 review 或存在 P0，阻断 AI push
+
+##### 场景：生成 session-summary Hook
+- **当** 用户选择"完整质量门"
+- **预期** 系统必须生成 `.harness/adapters/claude/hooks/session-summary.sh` 和 `.harness/adapters/codex/hooks/session-summary.sh`，记录本次 session 摘要到 `.harness/events/`
+
+##### 场景：生成 compact-state Hook
+- **当** 用户选择"完整质量门"
+- **预期** 系统必须生成 `.harness/adapters/claude/hooks/compact-state.sh` 和 `.harness/adapters/codex/hooks/compact-state.sh`，保存 active change / pending checks
+
+#### 需求项：Hook 配置文件生成
+
+系统必须生成 Hook 配置文件 Claude `settings.json` 和 Codex `hooks.json`。
+
+##### 场景：生成 Claude settings.json
+- **当** 用户选择 Claude 并安装 Hook
+- **预期** 系统必须生成 `.harness/adapters/claude/settings.json`，包含 Hook 名称、触发时机、脚本路径
+
+##### 场景：生成 Codex hooks.json
+- **当** 用户选择 Codex 并安装 Hook
+- **预期** 系统必须生成 `.harness/adapters/codex/hooks.json`，包含 Hook 名称、触发时机、脚本路径
+
+#### 需求项：Subagent 定义文件生成
+
+系统必须生成 Subagent 定义文件：需求分析 4 个、设计 4 个、代码生成 4 个、review 7 个。
+
+##### 场景：生成需求分析 agent
+- **当** 用户选择安装 Subagent
+- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-requirement-clarifier.md`、`harness-repo-context-mapper.md`、`harness-risk-reviewer.md`、`harness-scope-validator.md` 四个需求分析 agent
+
+##### 场景：生成设计 agent
+- **当** 用户选择安装 Subagent
+- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-design-writer.md`、`harness-contract-validator.md`、`harness-cross-module-validator.md`、`harness-task-planner.md` 四个设计 agent
+
+##### 场景：生成代码生成 agent
+- **当** 用户选择安装 Subagent
+- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-implementer.md`、`harness-test-reviewer.md`、`harness-impl-contract-validator.md`、`harness-doc-sync-reviewer.md` 四个代码生成 agent
+
+##### 场景：生成 review agent
+- **当** 用户选择安装 Subagent
+- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-rules-reviewer.md`、`harness-bug-scanner.md`、`harness-deep-bug-analyzer.md`、`harness-history-reviewer.md`、`harness-standards-reviewer.md`、`harness-contract-reviewer.md`、`harness-finding-validator.md` 七个 review agent
+
+##### 场景：生成 Codex agent
+- **当** 用户选择 Codex 并安装 Subagent
+- **预期** 系统必须生成 `.harness/adapters/codex/agents/*.toml` 格式的 agent 定义文件
+
+#### 需求项：dangerous-command 阻断集成到 CLI 流程
+
+系统必须将 dangerous-command 阻断集成到 CLI 流程，在 `src/cli/main.ts` 命令执行前拦截危险命令。
+
+##### 场景：CLI 执行前拦截
+- **当** 用户执行 `harness` 命令
+- **预期** 系统必须在 `src/cli/main.ts` 中检查命令是否命中 dangerous-command 列表，命中时必须阻断执行并返回错误码 2801
+
+##### 场景：阻断列表
+- **当** 检查危险命令
+- **预期** 阻断列表必须包含 `rm -rf`、`git reset --hard`、`git clean -fdx`、`Remove-Item -Recurse -Force`、`npm publish`、`git push --force`
 
 ### 移除需求
 
@@ -63,7 +97,7 @@
 ### 2.1 接口定义
 
 #### 接口基本信息
-- **路径**：`CLI: harness doctor` / `CLI: harness review` / Hook: `dangerous-command`、`review-before-push`
+- **路径**：`CLI: harness doctor` / Hook: `dangerous-command`、`sync-after-doc-change`、`review-before-push`、`session-summary`、`compact-state`
 - **方法**：本地进程调用或 AI 工具 Hook 调用
 - **内容类型**：`application/json` 优先；Hook 环境不支持 JSON 时输出纯文本摘要
 
@@ -76,33 +110,6 @@
 | files | string[] | 否 | 本次涉及文件 | `["AGENTS.md"]` | 路径必须位于项目根目录内 |
 | activeChange | string | 否 | 当前变更名 | `personal-dev-tool-harness` | kebab-case |
 | --json | boolean | 否 | JSON 输出 | `true` | stdout 必须是合法 JSON |
-
-#### 响应结构
-
-**成功响应 (0)**
-```json
-{
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "allowed": true,
-    "hook": "review-before-push",
-    "eventsPath": ".harness/events/20260528-session.json"
-  }
-}
-```
-
-**错误响应**
-```json
-{
-  "code": 2801,
-  "msg": "dangerous command blocked",
-  "data": {
-    "commandLine": "git reset --hard",
-    "matchedRule": "git reset --hard"
-  }
-}
-```
 
 #### 错误码定义
 | 错误码 | 含义 | 触发条件 |
@@ -123,7 +130,7 @@
 |------|-------|------|
 | dangerous-command 判断 | < 100 毫秒 (P99) | 单条命令 |
 | review-before-push 判断 | < 1000 毫秒 (P95) | 读取最近 review 状态 |
-| subagent DAG 冲突检查 | < 3000 毫秒 (P95) | 任务数小于 500 |
+| subagent DAG 冲突检查 | < 3000 毫秒 (P95) | 任务数 < 500 |
 
 ### 3.2 资源约束
 | 资源 | 限制 | 说明 |
@@ -133,8 +140,6 @@
 | 存储 | < 100 MB/月 | `.harness/events/**` 默认保留量 |
 
 ### 3.3 超时配置
-- 连接超时：0 毫秒，本地安全 Hook 不建立网络连接
-- 读取超时：5000 毫秒
 - 总超时：10000 毫秒，Hook 超时必须按失败处理
 
 ---
@@ -142,10 +147,8 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `harness-workspace-config`：读取 safety、orchestration、events 配置
-- [ ] `harness-adapter-skill-runtime`：生成 Claude/Codex Hook 投影
-- [ ] `harness-review`：提供最近 review 状态和 P0/P1/P2 finding
-- [ ] `harness-develop`：提供 active change 和任务 DAG
+- [ ] `src/capabilities/safety/command.ts`：实现 Hook 脚本生成（含 `settings.json`/`hooks.json` 配置文件）、Subagent 定义文件生成（需求分析 4 个、设计 4 个、代码生成 4 个、review 7 个）；阻断列表包含 6 个危险命令
+- [ ] `src/cli/main.ts`：集成 dangerous-command 阻断拦截点
 
 ### 4.2 外部依赖
 
@@ -160,6 +163,12 @@
 - [ ] JSON 安全配置：`.harness/config/harness.config.json` 中的 `safety`
 - [ ] JSON 事件：`.harness/events/<timestamp>-<event>.json`
 - [ ] JSON 状态：`.harness/state/active-change.json`、`.harness/state/capabilities.json`
+- [ ] Shell 脚本：`.harness/adapters/claude/hooks/*.sh`
+- [ ] Shell 脚本：`.harness/adapters/codex/hooks/*.sh`
+- [ ] JSON 配置：`.harness/adapters/claude/settings.json`
+- [ ] JSON 配置：`.harness/adapters/codex/hooks.json`
+- [ ] Markdown：`.harness/adapters/claude/agents/harness-*.md`
+- [ ] TOML：`.harness/adapters/codex/agents/*.toml`
 
 ---
 
@@ -170,12 +179,10 @@
 - 授权范围：Hook 默认只读；阻断类 Hook 不得修改源码；session-summary 只写 `.harness/events/**`
 
 ### 5.2 数据安全
-- 敏感字段：secretPatterns 全量覆盖；报告和事件不得包含命中敏感模式文件内容
-- 加密要求：事件文件不加密；必须避免写入密钥、token、凭据正文
+- 敏感字段：报告和事件不得包含命中敏感模式文件内容
 
 ### 5.3 审计要求
 - 日志记录：命令、命中规则、allow/deny、activeChange、review 状态摘要
-- 操作追踪：并行任务必须记录 agent id、文件范围、依赖关系、完成状态
 
 ---
 
@@ -192,10 +199,9 @@
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景
-> - [x] 使用「必须」强制要求，而非「应该」「可以」
-> - [x] 所有接口参数已量化（类型、必填、范围、示例）
-> - [x] 物理约束已量化（并发、超时、性能指标）
+> - [x] 每个需求项至少有一个场景（4 个需求项，14 个场景）
+> - [x] 使用「必须」强制要求
+> - [x] 所有接口参数已量化
+> - [x] 物理约束已量化
 > - [x] 错误码已定义
-> - [x] **技术选型已包含版本信息**（框架、数据库、缓存、中间件等）
-> - [x] 若跳过 proposal.md，影响范围已在此补齐
+> - [x] 技术选型已包含版本信息

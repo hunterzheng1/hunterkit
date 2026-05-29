@@ -17,7 +17,7 @@
 | 5 | compact-state Hook | hooks.compactState | HookDef | ✅ 保留 | |
 | 6 | Claude settings.json | claudeSettings | object | ✅ 保留 | |
 | 7 | Codex hooks.json | codexHooks | object | ✅ 保留 | |
-| 8 | Subagent 定义文件（22 个） | subagentDefs | SubagentDef[] | ✅ 保留 | |
+| 8 | Subagent 定义文件（19 个） | subagentDefs | SubagentDef[] | ✅ 保留 | |
 | 9 | 阻断列表（6 个命令） | blockedCommands | string[] | ✅ 保留 | |
 | 10 | hook 输出结构化 | hookOutput | HookOutput | ✅ 保留 | 四条原则之一 |
 | 11 | hook 不直接修代码 | hookNoCodeModify | boolean | ✅ 保留 | 四条原则之一 |
@@ -37,7 +37,7 @@
 | 文件路径 | 模块名 | 需修改的方法/函数 | 修改类型 | 说明 |
 |---------|--------|----------------|---------|------|
 | `src/capabilities/safety/command.ts` | capabilities/safety/command | 新增 `generateHooks()` | 新增方法 | 生成 5 个 Hook 脚本 |
-| `src/capabilities/safety/command.ts` | capabilities/safety/command | 新增 `generateSubagentDefs()` | 新增方法 | 生成 22 个 Subagent 定义文件 |
+| `src/capabilities/safety/command.ts` | capabilities/safety/command | 新增 `generateSubagentDefs()` | 新增方法 | 生成 19 个 Subagent 定义文件 |
 | `src/capabilities/safety/command.ts` | capabilities/safety/command | 新增 `generateHookConfigs()` | 新增方法 | 生成 Claude settings.json 和 Codex hooks.json |
 | `src/capabilities/safety/command.ts` | capabilities/safety/command | `DEFAULT_DANGEROUS_COMMANDS` | 替换实现 | 替换为需求文档定义的 6 个命令 |
 | `src/cli/main.ts` | cli/main | `main()` | 扩展逻辑 | 在命令执行前添加 dangerous-command 拦截 |
@@ -135,7 +135,7 @@ exit 0
 
 #### 接口 3：Subagent 定义文件生成
 
-**Claude agent 文件清单**（22 个）：
+**Claude agent 文件清单**（19 个）：
 
 | 类别 | Agent 名称 | 文件路径 |
 |------|-----------|---------|
