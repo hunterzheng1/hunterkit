@@ -62,6 +62,21 @@ describe('resolveWorkspacePaths', () => {
     expect(paths.cache).toContain('cache');
     expect(paths.develop).toContain('develop');
   });
+
+  // TASK-WC-03: 新增路径字段测试
+  it('should include docs, rules, events path fields', () => {
+    const paths = resolveWorkspacePaths('/tmp/test');
+    expect(paths.docs).toContain('docs');
+    expect(paths.rules).toContain('rules');
+    expect(paths.events).toContain('events');
+  });
+
+  it('should resolve docs/rules/events under .harness/', () => {
+    const paths = resolveWorkspacePaths('/tmp/test');
+    expect(paths.docs).toContain('.harness');
+    expect(paths.rules).toContain('.harness');
+    expect(paths.events).toContain('.harness');
+  });
 });
 
 describe('isPathWithinRoot', () => {
@@ -113,6 +128,55 @@ describe('validateHarnessConfig', () => {
     const result = validateHarnessConfig({});
     expect(result.valid).toBe(false);
     expect(result.missing.length).toBeGreaterThan(0);
+  });
+
+  // TASK-WC-02: 配置子字段校验测试
+  it('should detect missing orchestration.subagents', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.orchestration.subagents;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('orchestration.subagents');
+  });
+
+  it('should detect missing orchestration.maxParallelAgents', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.orchestration.maxParallelAgents;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('orchestration.maxParallelAgents');
+  });
+
+  it('should detect missing orchestration.validatorRequired', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.orchestration.validatorRequired;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('orchestration.validatorRequired');
+  });
+
+  it('should detect missing safety.dangerousCommandsBlocked', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.safety.dangerousCommandsBlocked;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('safety.dangerousCommandsBlocked');
+  });
+
+  it('should detect missing safety.secretPatterns', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.safety.secretPatterns;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('safety.secretPatterns');
+  });
+
+  it('should detect missing documents.generatedBlockPrefix', () => {
+    const config = createDefaultConfig('test') as any;
+    delete config.documents.generatedBlockPrefix;
+    const result = validateHarnessConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain('documents.generatedBlockPrefix');
   });
 });
 
@@ -266,6 +330,64 @@ describe('ensureWorkspace', () => {
     expect(result.dryRun).toBe(true);
     expect(existsSync(join(tempDir, '.harness', 'config', 'harness.config.json'))).toBe(false);
   });
+
+  // TASK-WC-01: 完整目录创建测试
+  it('should create all extended directories (docs/rules/events/adapters subdirs)', () => {
+    const config = createDefaultConfig('test');
+    ensureWorkspace({ cwd: tempDir, dryRun: false, json: false }, config);
+    
+    // docs 子目录
+    expect(existsSync(join(tempDir, '.harness', 'docs'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'docs', 'adr'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'docs', 'architecture'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'docs', 'decisions'))).toBe(true);
+    
+    // rules 目录
+    expect(existsSync(join(tempDir, '.harness', 'rules'))).toBe(true);
+    
+    // events 目录
+    expect(existsSync(join(tempDir, '.harness', 'events'))).toBe(true);
+    
+    // adapters 子目录
+    expect(existsSync(join(tempDir, '.harness', 'adapters', 'claude'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'adapters', 'codex'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'adapters', 'copilot'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'adapters', 'cursor'))).toBe(true);
+    
+    // develop 子目录
+    expect(existsSync(join(tempDir, '.harness', 'develop', 'archive'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'develop', 'templates'))).toBe(true);
+    
+    // reports 子目录
+    expect(existsSync(join(tempDir, '.harness', 'reports', 'sync'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'reports', 'develop'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'reports', 'review'))).toBe(true);
+  });
+
+  it('should create initial rule files (default.md, override.md, generated.md)', () => {
+    const config = createDefaultConfig('test');
+    ensureWorkspace({ cwd: tempDir, dryRun: false, json: false }, config);
+    
+    expect(existsSync(join(tempDir, '.harness', 'rules', 'default.md'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'rules', 'override.md'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'rules', 'generated.md'))).toBe(true);
+    
+    // 验证文件内容
+    const defaultContent = readFileSync(join(tempDir, '.harness', 'rules', 'default.md'), 'utf-8');
+    expect(defaultContent).toContain('Default Rules');
+  });
+
+  it('should be idempotent (skip existing directories)', () => {
+    const config = createDefaultConfig('test');
+    
+    // 第一次创建
+    ensureWorkspace({ cwd: tempDir, dryRun: false, json: false }, config);
+    
+    // 第二次创建（应该跳过已存在目录，不报错）
+    const result = ensureWorkspace({ cwd: tempDir, dryRun: false, json: false }, config);
+    expect(result.transactionId).toMatch(/^txn_/);
+    expect(existsSync(join(tempDir, '.harness', 'docs'))).toBe(true);
+  });
 });
 
 describe('readWorkspaceStatus', () => {
@@ -311,11 +433,11 @@ describe('detectLegacySources', () => {
     expect(sources.some(s => s.name === 'docsync')).toBe(true);
   });
 
-  it('should detect skywalk-sdd/ when present', () => {
-    mkdirSync(join(tempDir, 'skywalk-sdd'), { recursive: true });
-    writeFileSync(join(tempDir, 'skywalk-sdd', 'log.cjs'), 'content');
+  it('should detect docs/ when present', () => {
+    mkdirSync(join(tempDir, 'docs'), { recursive: true });
+    writeFileSync(join(tempDir, 'docs', 'test.md'), 'content');
     const sources = detectLegacySources(tempDir);
-    expect(sources.some(s => s.name === 'skywalk-sdd')).toBe(true);
+    expect(sources.some(s => s.name === 'docs')).toBe(true);
   });
 });
 

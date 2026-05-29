@@ -13,7 +13,7 @@ import { HarnessCliError } from './errors.js';
  * Parse global options and command from argv
  */
 export function parseGlobalOptions(argv: string[]): {
-  parsedCommand: ParsedCommand;
+  parsedCommand: ParsedCommand & { commandArgs: string[] };
   globalOptions: GlobalOptions;
 } {
   const program = new Command();
@@ -64,8 +64,11 @@ export function parseGlobalOptions(argv: string[]): {
   const command = programArgs.length > 0 ? programArgs[0] : null;
   const args = programArgs.length > 1 ? programArgs.slice(1) : [];
 
+  // 命令级参数透传：将命令后的所有参数作为 commandArgs
+  const commandArgs = args;
+
   return {
-    parsedCommand: { command, args },
+    parsedCommand: { command, args, commandArgs },
     globalOptions: {
       cwd,
       dryRun: opts.dryRun ?? false,

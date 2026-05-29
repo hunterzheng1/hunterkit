@@ -11,6 +11,8 @@ export interface ParsedCommand {
   command: string | null;
   /** Remaining positional arguments after command */
   args: string[];
+  /** 命令级参数透传（命令名之后的所有参数） */
+  commandArgs?: string[];
 }
 
 /** Global CLI options shared across all commands */

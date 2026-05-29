@@ -50,6 +50,7 @@ export interface MigrationOptions {
   migrateDocsync: boolean;
   migrateSdd: boolean;
   migrateReview: boolean;
+  migrateDocs: boolean;
 }
 
 /** Workspace status report */
@@ -72,6 +73,9 @@ export interface WorkspacePaths {
   reports: string;
   cache: string;
   develop: string;
+  docs: string;
+  rules: string;
+  events: string;
 }
 
 /** Transaction operation types */

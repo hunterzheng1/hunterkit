@@ -52,16 +52,28 @@ export function validateHarnessConfig(config: unknown): ConfigValidationResult {
   // documents
   if (!c.documents || typeof c.documents !== 'object') {
     missing.push('documents');
+  } else {
+    const d = c.documents as Record<string, unknown>;
+    if (d.generatedBlockPrefix === undefined) missing.push('documents.generatedBlockPrefix');
   }
 
   // orchestration
   if (!c.orchestration || typeof c.orchestration !== 'object') {
     missing.push('orchestration');
+  } else {
+    const o = c.orchestration as Record<string, unknown>;
+    if (o.subagents === undefined) missing.push('orchestration.subagents');
+    if (o.maxParallelAgents === undefined) missing.push('orchestration.maxParallelAgents');
+    if (o.validatorRequired === undefined) missing.push('orchestration.validatorRequired');
   }
 
   // safety
   if (!c.safety || typeof c.safety !== 'object') {
     missing.push('safety');
+  } else {
+    const s = c.safety as Record<string, unknown>;
+    if (s.dangerousCommandsBlocked === undefined) missing.push('safety.dangerousCommandsBlocked');
+    if (s.secretPatterns === undefined) missing.push('safety.secretPatterns');
   }
 
   return {

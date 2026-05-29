@@ -25,9 +25,9 @@ const LEGACY_SOURCE_MAP: Array<{
   targetSubdir: string;
 }> = [
   { name: 'docsync', path: '.docsync', type: 'rules', targetSubdir: 'rules/imported/docsync' },
-  { name: 'openspec-changes', path: 'openspec/changes', type: 'sdd', targetSubdir: 'develop/changes' },
-  { name: 'kld-review', path: '.kld-review', type: 'review', targetSubdir: 'reports/imported/kld-review' },
-  { name: 'skywalk-sdd', path: 'skywalk-sdd', type: 'sdd', targetSubdir: 'develop/imported/skywalk-sdd' },
+  { name: 'sdd', path: 'openspec/changes', type: 'sdd', targetSubdir: 'develop/changes' },
+  { name: 'review', path: '.kld-review', type: 'review', targetSubdir: 'reports/imported/kld-review' },
+  { name: 'docs', path: 'docs', type: 'docs', targetSubdir: 'docs/imported' },
 ];
 
 /**
@@ -83,9 +83,9 @@ export function buildMigrationPlan(
 
   const flagMap: Record<string, boolean> = {
     docsync: options.migrateDocsync,
-    'openspec-changes': options.migrateSdd,
-    'skywalk-sdd': options.migrateSdd,
-    'kld-review': options.migrateReview,
+    sdd: options.migrateSdd,
+    review: options.migrateReview,
+    docs: options.migrateDocs,
   };
 
   for (const source of sources) {

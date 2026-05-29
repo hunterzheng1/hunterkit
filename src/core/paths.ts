@@ -41,6 +41,9 @@ export function resolveWorkspacePaths(root: string): WorkspacePaths {
     reports: resolve(harness, 'reports'),
     cache: resolve(harness, 'cache'),
     develop: resolve(harness, 'develop'),
+    docs: resolve(harness, 'docs'),
+    rules: resolve(harness, 'rules'),
+    events: resolve(harness, 'events'),
   };
 }
 

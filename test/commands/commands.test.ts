@@ -161,4 +161,73 @@ describe('runConfigCommand', () => {
     expect(result.code).toBe(0);
     expect((result.data as any).transactionId).toBeTruthy();
   });
+
+  // TASK-AR-03: 迁移参数解析测试
+  it('should parse --migrate-docsync flag', async () => {
+    initWorkspace(tempDir);
+    mkdirSync(join(tempDir, '.docsync'), { recursive: true });
+    writeFileSync(join(tempDir, '.docsync', 'test.md'), 'content');
+    const ctx = createTestContext(tempDir, 'config');
+    ctx.globalOptions.dryRun = true;
+    // 模拟命令行参数
+    (ctx as any).args = ['--migrate-docsync'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).sources).toContain('docsync');
+  });
+
+  it('should parse --migrate-sdd flag', async () => {
+    initWorkspace(tempDir);
+    mkdirSync(join(tempDir, 'openspec/changes'), { recursive: true });
+    writeFileSync(join(tempDir, 'openspec/changes/test.md'), 'content');
+    const ctx = createTestContext(tempDir, 'config');
+    ctx.globalOptions.dryRun = true;
+    (ctx as any).args = ['--migrate-sdd'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).sources).toContain('sdd');
+  });
+
+  it('should parse --migrate-review flag', async () => {
+    initWorkspace(tempDir);
+    mkdirSync(join(tempDir, '.kld-review'), { recursive: true });
+    writeFileSync(join(tempDir, '.kld-review/test.md'), 'content');
+    const ctx = createTestContext(tempDir, 'config');
+    ctx.globalOptions.dryRun = true;
+    (ctx as any).args = ['--migrate-review'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).sources).toContain('review');
+  });
+
+  it('should parse --migrate-docs flag', async () => {
+    initWorkspace(tempDir);
+    mkdirSync(join(tempDir, 'docs/adr'), { recursive: true });
+    writeFileSync(join(tempDir, 'docs/adr/test.md'), 'content');
+    const ctx = createTestContext(tempDir, 'config');
+    ctx.globalOptions.dryRun = true;
+    (ctx as any).args = ['--migrate-docs'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).sources).toContain('docs');
+  });
+
+  it('should parse --repair-adapters flag', async () => {
+    initWorkspace(tempDir);
+    const ctx = createTestContext(tempDir, 'config');
+    (ctx as any).args = ['--repair-adapters'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).repaired).toBeDefined();
+  });
+
+  it('should respect --dry-run with --repair-adapters', async () => {
+    initWorkspace(tempDir);
+    const ctx = createTestContext(tempDir, 'config');
+    ctx.globalOptions.dryRun = true;
+    (ctx as any).args = ['--repair-adapters'];
+    const result = await runConfigCommand(ctx);
+    expect(result.code).toBe(0);
+    expect((result.data as any).dryRun).toBe(true);
+  });
 });

@@ -43,11 +43,12 @@
 | `src/capabilities/review/command.ts` | capabilities/review/command | `runReviewCommand()` | 替换实现 | 当前仅做简单文件扫描，需替换为完整多 agent 审查模式 |
 | `src/capabilities/review/command.ts` | capabilities/review/command | `scanFilesForReview()` | 替换实现 | 需支持 local/staged/scan 三种范围模式 |
 | `src/capabilities/review/command.ts` | capabilities/review/command | `reviewFile()` | 替换实现 | 需支持 P0/P1/P2 分级和 confidence 评分 |
-| `src/capabilities/review/types.ts` | capabilities/review/types | `ReviewFinding` | 扩展逻辑 | 添加 severity(P0/P1/P2)、confidence、reviewer 字段 |
 
 ### 2.2 需新建的文件
 
-无。
+| 文件路径 | 模块名 | 需实现的方法/函数 | 说明 |
+|---------|--------|----------------|------|
+| `src/capabilities/review/types.ts` | capabilities/review/types | `ReviewFinding` 接口 | 定义 review finding 数据结构，包含 severity(P0/P1/P2)、confidence、reviewer 字段 |
 
 ### 2.3 现有逻辑约束
 

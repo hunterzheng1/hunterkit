@@ -61,6 +61,76 @@ describe('ensureAdapterSources', () => {
     ensureAdapterSources(tempDir, [first]);
     expect(readFileSync(fullPath, 'utf-8')).toBe('custom content');
   });
+
+  // TASK-AR-02: shared 目录生成测试
+  it('should create shared/skills/harness/ directory structure', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    
+    // 验证 shared 目录存在
+    const sharedBase = join(tempDir, '.harness/adapters/shared/skills/harness');
+    expect(existsSync(sharedBase)).toBe(true);
+    
+    // 验证 references 子目录
+    expect(existsSync(join(sharedBase, 'references'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'references/command-contract.md'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'references/document-contract.md'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'references/agent-orchestration.md'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'references/safety.md'))).toBe(true);
+    
+    // 验证 scripts 子目录
+    expect(existsSync(join(sharedBase, 'scripts'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'scripts/validate-workspace.mjs'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'scripts/run-harness.mjs'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'scripts/parse-result.mjs'))).toBe(true);
+    
+    // 验证 assets 子目录
+    expect(existsSync(join(sharedBase, 'assets'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'assets/AGENTS.block.md'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'assets/CLAUDE.template.md'))).toBe(true);
+    expect(existsSync(join(sharedBase, 'assets/review-report.template.md'))).toBe(true);
+  });
+
+  it('should include Copilot adapter in registry', () => {
+    const entries = createAdapterRegistry();
+    const copilotEntries = entries.filter(e => e.tool === 'copilot');
+    expect(copilotEntries.length).toBeGreaterThan(0);
+    
+    // 验证 copilot projectionPath 正确
+    const copilotSkill = copilotEntries.find(e => e.sourcePath.includes('SKILL.md'));
+    expect(copilotSkill).toBeDefined();
+    expect(copilotSkill!.projectionPath).toBe('.github/copilot-instructions.md');
+  });
+
+  it('should include Cursor adapter in registry', () => {
+    const entries = createAdapterRegistry();
+    const cursorEntries = entries.filter(e => e.tool === 'cursor');
+    expect(cursorEntries.length).toBeGreaterThan(0);
+  });
+
+  it('should generate openai.yaml for Codex', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    
+    const openaiYamlPath = join(tempDir, '.harness/adapters/codex/skills/harness/agents/openai.yaml');
+    expect(existsSync(openaiYamlPath)).toBe(true);
+    
+    const content = readFileSync(openaiYamlPath, 'utf-8');
+    expect(content).toContain('interface:');
+    expect(content).toContain('display_name:');
+    expect(content).toContain('policy:');
+  });
+
+  it('should generate copilot-instructions.md', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    
+    const copilotPath = join(tempDir, '.harness/adapters/copilot/skills/harness/SKILL.md');
+    expect(existsSync(copilotPath)).toBe(true);
+    
+    const content = readFileSync(copilotPath, 'utf-8');
+    expect(content).toContain('Harness');
+  });
 });
 
 describe('renderProjection', () => {
@@ -80,6 +150,29 @@ describe('renderProjection', () => {
     const entry = createAdapterRegistry()[0];
     const rendered = renderProjection(entry, 'test content');
     expect(rendered).toContain('harness config --repair-adapters');
+  });
+
+  // TASK-AR-01: frontmatter 生成测试
+  it('should include Claude frontmatter for claude tool', () => {
+    const entries = createAdapterRegistry();
+    const claudeEntry = entries.find(e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'));
+    expect(claudeEntry).toBeDefined();
+    const rendered = renderProjection(claudeEntry!, 'test content');
+    expect(rendered).toContain('---');
+    expect(rendered).toContain('name: harness');
+    expect(rendered).toContain('description:');
+    expect(rendered).toContain('when_to_use:');
+    expect(rendered).toContain('allowed-tools:');
+  });
+
+  it('should include Codex frontmatter for codex tool', () => {
+    const entries = createAdapterRegistry();
+    const codexEntry = entries.find(e => e.tool === 'codex' && e.sourcePath.includes('SKILL.md'));
+    expect(codexEntry).toBeDefined();
+    const rendered = renderProjection(codexEntry!, 'test content');
+    expect(rendered).toContain('---');
+    expect(rendered).toContain('name: harness');
+    expect(rendered).toContain('description:');
   });
 });
 

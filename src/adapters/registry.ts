@@ -23,11 +23,64 @@ Available commands: inspect, sync, develop, review, knowledge, status, doctor, c
 `;
 
 /** Codex agent metadata template */
-const CODEX_AGENT_TEMPLATE = `name: harness
-description: Harness CLI adapter for Codex
+const CODEX_AGENT_TEMPLATE = `interface:
+  display_name: Harness
+  short_description: AI-assisted development workflow tool
+  default_prompt: You are a helpful AI assistant for the Harness CLI tool.
+
+policy:
+  allow_implicit_invocation: false
+
 tools:
   - name: harness
     description: Run harness CLI commands
+`;
+
+/** Copilot instructions template */
+const COPILOT_INSTRUCTIONS_TEMPLATE = `# GitHub Copilot Instructions
+
+This repository uses Harness for AI-assisted development.
+
+## Project Overview
+
+Harness is a CLI tool that provides:
+- Project structure inspection and fact generation
+- Document synchronization with knowledge base
+- Development workflow automation
+- Code review with AI assistance
+- Knowledge management and search
+
+## Available Commands
+
+\`\`\`bash
+harness inspect    # Scan project structure
+harness sync       # Sync documents
+harness develop    # Run development workflow
+harness review     # Run code review
+harness knowledge  # Manage knowledge index
+harness status     # Show workspace status
+harness doctor     # Diagnose environment
+harness config     # Manage configuration
+\`\`\`
+
+## Key Directories
+
+- \`.harness/\` - Harness workspace root
+- \`.harness/config/\` - Configuration files
+- \`.harness/facts/\` - Project facts database
+- \`.harness/docs/\` - Generated documentation
+- \`.harness/adapters/\` - AI tool adapters
+
+## Guidelines
+
+1. Always check \`harness status\` before making changes
+2. Use \`harness review\` before committing code
+3. Respect managed document boundaries (look for \`<!-- harness-managed -->\` markers)
+4. Use \`harness knowledge --search\` to find project-specific patterns
+
+## Configuration
+
+See \`.harness/config/harness.config.json\` for project configuration.
 `;
 
 /**
@@ -56,8 +109,8 @@ export function createAdapterRegistry(): AdapterRegistryEntry[] {
     {
       tool: 'copilot',
       sourcePath: '.harness/adapters/copilot/skills/harness/SKILL.md',
-      projectionPath: '.github/copilot/skills/harness/SKILL.md',
-      templateContent: SHARED_SKILL_TEMPLATE,
+      projectionPath: '.github/copilot-instructions.md',
+      templateContent: COPILOT_INSTRUCTIONS_TEMPLATE,
     },
     {
       tool: 'cursor',

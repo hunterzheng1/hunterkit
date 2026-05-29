@@ -9,6 +9,7 @@ import { createCommandRegistry } from './command-registry.js';
 import { HarnessCliError, toCliResponse } from './errors.js';
 import { writeCliResponse } from './output.js';
 import { runInteractiveEntrypoint } from './interactive.js';
+import type { WizardAnswers } from './interactive.js';
 import { runStatusCommand } from '../commands/status.js';
 import { runDoctorCommand } from '../commands/doctor.js';
 import { runConfigCommand } from '../commands/config.js';
@@ -17,6 +18,15 @@ import { runSyncCommand } from '../capabilities/sync/command.js';
 import { runDevelopCommand } from '../capabilities/develop/command.js';
 import { runReviewCommand } from '../capabilities/review/command.js';
 import { runKnowledgeCommand } from '../capabilities/knowledge/command.js';
+import { ensureWorkspace } from '../core/workspace.js';
+import type { HarnessConfig } from '../core/types.js';
+import { createAdapterRegistry, filterByTool } from '../adapters/registry.js';
+import type { AdapterTool } from '../adapters/types.js';
+import { ensureAdapterSources } from '../adapters/source-manager.js';
+import { applyProjectionWrites } from '../adapters/projection-writer.js';
+import { beginTransaction, commitTransaction } from '../core/transaction.js';
+import { writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Register all real command handlers, replacing stubs
@@ -35,6 +45,110 @@ function registerAllHandlers(registry: CommandRegistry): void {
   for (const handler of handlers) {
     registry.registerHandler(handler);
   }
+}
+
+/**
+ * 从向导答案构建 HarnessConfig
+ */
+function buildConfigFromAnswers(answers: WizardAnswers): HarnessConfig {
+  return {
+    schemaVersion: 1,
+    project: {
+      name: answers.projectPath.split('/').pop() || 'project',
+      type: answers.projectType,
+    },
+    aiTools: {
+      claude: answers.aiTools.includes('claude'),
+      codex: answers.aiTools.includes('codex'),
+      copilot: false,
+      cursor: false,
+    },
+    capabilities: {
+      inspect: answers.capabilities.includes('inspect'),
+      sync: answers.capabilities.includes('sync'),
+      develop: answers.capabilities.includes('develop'),
+      review: answers.capabilities.includes('review'),
+      knowledge: answers.capabilities.includes('knowledge'),
+    },
+    documents: {
+      managed: ['AGENTS.md', 'CLAUDE.md'],
+      generatedBlockPrefix: '<!-- harness-generated -->',
+    },
+    orchestration: {
+      subagents: 'auto',
+      maxParallelAgents: 4,
+      validatorRequired: true,
+    },
+    safety: {
+      dangerousCommandsBlocked: answers.hookStrength !== 'none',
+      secretPatterns: ['.env*', '*.pem', '*.key'],
+    },
+  };
+}
+
+/**
+ * 向导完成后执行工作区创建和产物生成
+ */
+function executePostWizardIntegration(
+  cwd: string,
+  answers: WizardAnswers,
+  isDryRun: boolean,
+): { artifacts: string[]; warnings: string[] } {
+  const artifacts: string[] = [];
+  const warnings: string[] = [];
+
+  if (isDryRun) {
+    warnings.push('Dry-run mode: no files were written');
+    return { artifacts, warnings };
+  }
+
+  try {
+    // 1. 创建工作区目录结构
+    const config = buildConfigFromAnswers(answers);
+    const workspaceResult = ensureWorkspace(
+      { cwd, dryRun: isDryRun, json: false },
+      config,
+    );
+    artifacts.push(...workspaceResult.created);
+
+    // 2. 生成 AGENTS.md 和 CLAUDE.md
+    const agentsPath = join(cwd, 'AGENTS.md');
+    if (!existsSync(agentsPath)) {
+      const agentsContent = `# AGENTS.md\n\nProject: ${config.project.name}\nType: ${config.project.type}\n`;
+      writeFileSync(agentsPath, agentsContent, 'utf-8');
+      artifacts.push('AGENTS.md');
+    }
+
+    if (config.aiTools.claude) {
+      const claudePath = join(cwd, 'CLAUDE.md');
+      if (!existsSync(claudePath)) {
+        const claudeContent = `# CLAUDE.md\n\nProject: ${config.project.name}\n`;
+        writeFileSync(claudePath, claudeContent, 'utf-8');
+        artifacts.push('CLAUDE.md');
+      }
+    }
+
+    // 3. 生成 Skill 投影
+    const adapterEntries = createAdapterRegistry();
+    const selectedTools = answers.aiTools as AdapterTool[];
+    const filteredEntries = filterByTool(adapterEntries, selectedTools);
+
+    ensureAdapterSources(cwd, filteredEntries);
+
+    const tx = beginTransaction(cwd, isDryRun);
+    const projectionStatuses = applyProjectionWrites(cwd, filteredEntries, tx);
+    commitTransaction(tx);
+
+    for (const status of projectionStatuses) {
+      if (status.status === 'synced') {
+        artifacts.push(status.projectionPath);
+      }
+    }
+  } catch (error) {
+    warnings.push(`Post-wizard integration failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return { artifacts, warnings };
 }
 
 /**
@@ -66,6 +180,23 @@ export async function main(
         registry,
       };
       response = await runInteractiveEntrypoint(context);
+
+      // 向导完成后执行集成逻辑
+      if (response.code === 0 && response.data?.mode === 'wizard' && response.data?.wizardAnswers) {
+        const answers = response.data.wizardAnswers as WizardAnswers;
+        const isDryRun = response.data.dryRun === true;
+        const { artifacts, warnings } = executePostWizardIntegration(
+          globalOptions.cwd,
+          answers,
+          isDryRun,
+        );
+        response.artifacts = artifacts.map(path => ({
+          type: 'file',
+          path,
+          description: 'Generated by init wizard',
+        }));
+        response.warnings.push(...warnings);
+      }
     } else {
       // Command provided - resolve and execute
       const handler = registry.resolve(parsedCommand.command);
@@ -76,8 +207,6 @@ export async function main(
 
       // Check workspace initialization if required
       if (handler.requiresInitializedWorkspace) {
-        const { existsSync } = await import('node:fs');
-        const { join } = await import('node:path');
         const configPath = join(globalOptions.cwd, '.harness', 'config', 'harness.config.json');
         if (!existsSync(configPath)) {
           throw new HarnessCliError(2001, `Command "${parsedCommand.command}" requires an initialized workspace`);

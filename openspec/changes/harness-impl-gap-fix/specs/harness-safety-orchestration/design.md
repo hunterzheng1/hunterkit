@@ -260,7 +260,7 @@ generateSubagentDefs(cwd, config):
     // 代码生成 4 个
     { name: 'harness-implementer', category: 'implement' },
     { name: 'harness-test-reviewer', category: 'implement' },
-    { name: 'harness-contract-validator', category: 'implement' },
+    { name: 'harness-impl-contract-validator', category: 'implement' },
     { name: 'harness-doc-sync-reviewer', category: 'implement' },
     // Review 7 个
     { name: 'harness-rules-reviewer', category: 'review' },

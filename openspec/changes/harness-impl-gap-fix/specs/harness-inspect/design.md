@@ -33,11 +33,12 @@
 | 文件路径 | 模块名 | 需修改的方法/函数 | 修改类型 | 说明 |
 |---------|--------|----------------|---------|------|
 | `src/capabilities/inspect/command.ts` | capabilities/inspect/command | `runInspectCommand()` | 扩展逻辑 | 添加 `--full`、`--path`、`--rules` 参数解析 |
-| `src/capabilities/inspect/scanner.ts` | capabilities/inspect/scanner | `scanProject()` | 扩展逻辑 | 支持 `--path` 限定扫描范围 |
 
 ### 2.2 需新建的文件
 
-无。
+| 文件路径 | 模块名 | 需实现的方法/函数 | 说明 |
+|---------|--------|----------------|------|
+| `src/capabilities/inspect/scanner.ts` | capabilities/inspect/scanner | `scanProject()` | 实现项目扫描逻辑，支持 `--path` 限定扫描范围 |
 
 ### 2.3 现有逻辑约束
 
