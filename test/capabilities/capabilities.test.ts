@@ -138,7 +138,7 @@ describe('runDevelopCommand', () => {
 
   it('should create proposal for new change', async () => {
     const ctx = createTestContext(tempDir);
-    ctx.command = 'develop my-new-feature';
+    (ctx as any).args = ['my-new-feature'];
     const result = await runDevelopCommand(ctx);
     expect(result.code).toBe(0);
     expect((result.data as any).change).toBe('my-new-feature');
@@ -160,7 +160,7 @@ describe('runDevelopCommand', () => {
 
   it('should respect dry-run', async () => {
     const ctx = createTestContext(tempDir, true);
-    ctx.command = 'develop my-feature';
+    (ctx as any).args = ['my-feature'];
     const result = await runDevelopCommand(ctx);
     expect(result.code).toBe(0);
     expect(existsSync(join(tempDir, '.harness', 'develop', 'changes', 'my-feature', 'proposal.md'))).toBe(false);
@@ -226,21 +226,24 @@ describe('runKnowledgeCommand', () => {
 
   it('should generate knowledge index', async () => {
     const ctx = createTestContext(tempDir);
+    (ctx as any).args = ['--index'];
     const result = await runKnowledgeCommand(ctx);
     expect(result.code).toBe(0);
-    expect((result.data as any).entryCount).toBeGreaterThan(0);
+    expect((result.data as any).indexedFiles).toBeGreaterThan(0);
   });
 
   it('should write index file', async () => {
     const ctx = createTestContext(tempDir);
+    (ctx as any).args = ['--index'];
     await runKnowledgeCommand(ctx);
-    expect(existsSync(join(tempDir, '.harness', 'facts', 'knowledge-index.json'))).toBe(true);
+    expect(existsSync(join(tempDir, '.harness', 'cache', 'knowledge.sqlite'))).toBe(true);
   });
 
   it('should respect dry-run', async () => {
     const ctx = createTestContext(tempDir, true);
+    (ctx as any).args = ['--index'];
     await runKnowledgeCommand(ctx);
-    expect(existsSync(join(tempDir, '.harness', 'facts', 'knowledge-index.json'))).toBe(false);
+    expect(existsSync(join(tempDir, '.harness', 'cache', 'knowledge.sqlite'))).toBe(false);
   });
 });
 

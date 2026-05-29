@@ -11,10 +11,16 @@ import { beginTransaction, stageWrite, commitTransaction } from '../../core/tran
 import { scanProject, generateModuleMap, generateRules } from './scanner.js';
 import type { InspectOptions, InspectScope } from './types.js';
 
+/** 解析后的 inspect 参数（含 scope 嵌套结构） */
+export interface ParsedInspectArgs {
+  scope: InspectScope;
+  rules: boolean;
+}
+
 /**
  * Parse inspect command arguments
  */
-export function parseInspectArgs(args: string[], cwd: string): InspectOptions {
+export function parseInspectArgs(args: string[], cwd: string): ParsedInspectArgs {
   const full = args.includes('--full');
   const rules = args.includes('--rules');
   let path: string | null = null;
@@ -24,25 +30,13 @@ export function parseInspectArgs(args: string[], cwd: string): InspectOptions {
     path = args[pathIdx + 1];
   }
   
-  // 首次无 facts 时自动等价 --full
-  const factsPath = resolve(cwd, '.harness/facts/repo-map.json');
-  if (!full && !path && !existsSync(factsPath)) {
-    return { 
-      full: true, 
-      path: null, 
-      rules, 
-      json: false, 
-      dryRun: false 
-    };
+  // 首次无 facts 目录时自动等价 --full
+  const factsDir = resolve(cwd, '.harness/facts');
+  if (!full && !path && !existsSync(factsDir)) {
+    return { scope: { full: true, path: null }, rules };
   }
   
-  return { 
-    full, 
-    path, 
-    rules, 
-    json: false, 
-    dryRun: false 
-  };
+  return { scope: { full, path }, rules };
 }
 
 /**
@@ -54,9 +48,8 @@ export async function runInspectCommand(context: CommandContext): Promise<CliRes
 
   // 解析命令参数
   const args = (context as any).args || [];
-  const options = parseInspectArgs(args, cwd);
-  
-  const scope: InspectScope = { full: options.full, path: options.path };
+  const parsed = parseInspectArgs(args, cwd);
+  const scope: InspectScope = parsed.scope;
   const repoMap = scanProject(cwd, scope);
 
   const factsPath = resolve(paths.facts, 'repo-map.json');
@@ -69,7 +62,7 @@ export async function runInspectCommand(context: CommandContext): Promise<CliRes
     stageWrite(tx, moduleMapPath, generateModuleMap(repoMap));
     
     // 仅当 --rules 为 true 时写入 rules.generated.md
-    if (options.rules) {
+    if (parsed.rules) {
       stageWrite(tx, rulesPath, generateRules(repoMap));
     }
     
@@ -83,7 +76,7 @@ export async function runInspectCommand(context: CommandContext): Promise<CliRes
       command: 'inspect',
       factsPath: dryRun ? factsPath.replace(cwd + '/', '') : factsPath.replace(cwd + '/', ''),
       moduleMapPath: moduleMapPath.replace(cwd + '/', ''),
-      rulesPath: options.rules ? rulesPath.replace(cwd + '/', '') : null,
+      rulesPath: parsed.rules ? rulesPath.replace(cwd + '/', '') : null,
       scope,
       languages: repoMap.languages,
       fileCount: repoMap.buildFiles.length + repoMap.docs.length + repoMap.agentFiles.length,

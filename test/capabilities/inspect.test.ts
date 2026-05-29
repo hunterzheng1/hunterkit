@@ -178,6 +178,7 @@ describe('runInspectCommand integration', () => {
   it('should perform full scan with --full', async () => {
     mkdirSync(join(tempDir, 'src'), { recursive: true });
     writeFileSync(join(tempDir, 'src', 'index.ts'), 'export const x = 1;');
+    writeFileSync(join(tempDir, 'package.json'), '{"name":"test","version":"1.0.0"}');
     
     const ctx = createTestContext(tempDir, 'inspect', ['--full']);
     const result = await runInspectCommand(ctx);

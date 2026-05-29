@@ -17,7 +17,7 @@ export interface ReviewOptions {
 export interface ReviewFinding {
   file: string;
   line: number;
-  severity: 'error' | 'warning' | 'info';
+  severity: 'P0' | 'P1' | 'P2';
   category: string;
   message: string;
   suggestion?: string;

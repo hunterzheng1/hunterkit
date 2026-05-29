@@ -33,6 +33,23 @@ function scanDir(dir: string, depth = 0, maxDepth = 3): string[] {
  */
 export function scanProject(root: string, scope: InspectScope): RepoMap {
   const scanRoot = scope.path ? resolve(root, scope.path) : root;
+
+  // 路径校验：不存在 → 2301
+  if (scope.path && !existsSync(scanRoot)) {
+    throw Object.assign(new Error(`Path does not exist: ${scope.path}`), { code: 2301 });
+  }
+
+  // 路径校验：越界 → 2302
+  if (scope.path) {
+    const rel = relative(root, scanRoot);
+    if (rel.startsWith('..') || resolve(scanRoot) === resolve(root)) {
+      // 允许 scanRoot === root（--path .）
+      if (rel.startsWith('..')) {
+        throw Object.assign(new Error(`Path is outside project root: ${scope.path}`), { code: 2302 });
+      }
+    }
+  }
+
   const files = scanDir(scanRoot);
   const languages = new Set<string>();
   const packageManagers: string[] = [];

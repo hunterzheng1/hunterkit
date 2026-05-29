@@ -3,7 +3,7 @@
  * @module capabilities/develop/command
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { CommandContext, CliResponse } from '../../cli/types.js';
 import { resolveWorkspacePaths } from '../../core/paths.js';
@@ -17,7 +17,70 @@ function validateChangeName(name: string): string | null {
   return null;
 }
 
-function resolveStorage(cwd: string, change: string): StorageLocation {
+/**
+ * 解析 develop 命令参数
+ */
+export function parseDevelopArgs(args: string[]): { change: string; options: any } {
+  if (!args || args.length === 0) {
+    throw new Error('Change name is required');
+  }
+
+  const change = args[0];
+  const validationError = validateChangeName(change);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  const options: any = {
+    stage: null,
+    from: null,
+    capability: null,
+    parallel: true,
+  };
+
+  // 解析阶段参数（互斥）
+  const stageFlags = ['--propose', '--spec', '--design', '--tasks', '--check', '--apply', '--archive'];
+  const activeStages = stageFlags.filter(flag => args.includes(flag));
+  
+  if (activeStages.length > 1) {
+    throw new Error('Stage flags are mutually exclusive');
+  }
+  
+  if (activeStages.length === 1) {
+    options.stage = activeStages[0].replace('--', '') as DevelopStage;
+  }
+
+  // 解析 --from
+  const fromIdx = args.indexOf('--from');
+  if (fromIdx !== -1 && fromIdx + 1 < args.length) {
+    options.from = args[fromIdx + 1];
+  }
+
+  // 解析 --capability
+  const capIdx = args.indexOf('--capability');
+  if (capIdx !== -1 && capIdx + 1 < args.length) {
+    options.capability = args[capIdx + 1];
+  }
+
+  // 解析 --parallel / --no-parallel（互斥）
+  const hasParallel = args.includes('--parallel');
+  const hasNoParallel = args.includes('--no-parallel');
+  
+  if (hasParallel && hasNoParallel) {
+    throw new Error('--parallel and --no-parallel are mutually exclusive');
+  }
+  
+  if (hasNoParallel) {
+    options.parallel = false;
+  }
+
+  return { change, options };
+}
+
+/**
+ * 解析存储位置（canonical 或 legacy）
+ */
+export function resolveStorage(cwd: string, change: string): StorageLocation {
   const canonicalRoot = resolve(cwd, '.harness', 'develop', 'changes', change);
   const legacyRoot = resolve(cwd, 'openspec', 'changes', change);
   const canonicalExists = existsSync(canonicalRoot);
@@ -29,24 +92,30 @@ function resolveStorage(cwd: string, change: string): StorageLocation {
   return { canonicalRoot, legacyRoot, status: 'missing' };
 }
 
-function detectStage(storage: StorageLocation): DevelopStage {
+/**
+ * 检测当前阶段
+ */
+export function detectStage(storage: StorageLocation): DevelopStage {
   const root = storage.status === 'legacy' ? storage.legacyRoot : storage.canonicalRoot;
   const specsDir = join(root, 'specs');
 
   if (!existsSync(join(root, 'proposal.md'))) return 'propose';
   if (!existsSync(specsDir)) return 'spec';
 
-  // Check if specs have design.md
-  if (existsSync(specsDir)) {
-    const { readdirSync } = require('node:fs');
-    try {
-      const specs = readdirSync(specsDir, { withFileTypes: true }).filter((d: any) => d.isDirectory());
-      const hasDesign = specs.some((s: any) => existsSync(join(specsDir, s.name, 'design.md')));
-      const hasTasks = specs.some((s: any) => existsSync(join(specsDir, s.name, 'tasks.md')));
-      if (!hasDesign) return 'design';
-      if (!hasTasks) return 'tasks';
-    } catch {}
-  }
+  // 检查 specs 目录下的 capability 子目录
+  try {
+    const specs = readdirSync(specsDir, { withFileTypes: true }).filter((d: any) => d.isDirectory());
+    
+    if (specs.length === 0) return 'spec';
+    
+    // 检查是否所有 capability 都有 design.md
+    const allHaveDesign = specs.every((s: any) => existsSync(join(specsDir, s.name, 'design.md')));
+    if (!allHaveDesign) return 'design';
+    
+    // 检查是否所有 capability 都有 tasks.md
+    const allHaveTasks = specs.every((s: any) => existsSync(join(specsDir, s.name, 'tasks.md')));
+    if (!allHaveTasks) return 'tasks';
+  } catch {}
 
   return 'check';
 }
@@ -56,40 +125,109 @@ function detectStage(storage: StorageLocation): DevelopStage {
  */
 export async function runDevelopCommand(context: CommandContext): Promise<CliResponse> {
   const { cwd, dryRun } = context.globalOptions;
-  const change = context.command.split(' ').slice(1).join(' ') || '';
-
-  if (!change) {
+  const args = (context as any).args || [];
+  
+  // 解析参数
+  let parsed: { change: string; options: any };
+  try {
+    parsed = parseDevelopArgs(args);
+  } catch (err: any) {
     return {
       code: 2501,
-      msg: 'Change name is required. Usage: harness develop <change-name>',
+      msg: err.message,
       data: { command: 'develop' },
       warnings: [],
     };
   }
 
-  const validationError = validateChangeName(change);
-  if (validationError) {
-    return {
-      code: 2501,
-      msg: validationError,
-      data: { command: 'develop', change },
-      warnings: [],
-    };
+  const { change, options } = parsed;
+  const storage = resolveStorage(cwd, change);
+  
+  // 自动检测阶段或使用指定阶段
+  const stage = options.stage || detectStage(storage);
+  const artifacts: string[] = [];
+  const warnings: string[] = [];
+
+  // 执行对应阶段
+  switch (stage) {
+    case 'propose':
+      if (storage.status === 'missing') {
+        const proposalDir = storage.canonicalRoot;
+        if (!dryRun) {
+          mkdirSync(proposalDir, { recursive: true });
+          const proposalContent = `---\nmode: full\ntest-strategy: tdd\n---\n\n# ${change}\n\n## Background\n\nTODO: Describe the business intent.\n\n## Capabilities\n\nTODO: List capabilities.\n`;
+          writeFileSync(join(proposalDir, 'proposal.md'), proposalContent);
+        }
+        artifacts.push(`${storage.canonicalRoot.replace(cwd + '/', '')}/proposal.md`);
+      }
+      break;
+
+    case 'spec':
+      // 检查 proposal 是否存在
+      if (!existsSync(join(storage.canonicalRoot, 'proposal.md')) && 
+          !existsSync(join(storage.legacyRoot, 'proposal.md'))) {
+        return {
+          code: 2502,
+          msg: 'Proposal not found. Run --propose first.',
+          data: { command: 'develop', change, stage },
+          warnings: [],
+        };
+      }
+      // TODO: 实现 spec 阶段
+      warnings.push('Spec stage not yet implemented');
+      break;
+
+    case 'design':
+      // 检查 proposal 和 specs 是否存在
+      if (!existsSync(join(storage.canonicalRoot, 'proposal.md')) && 
+          !existsSync(join(storage.legacyRoot, 'proposal.md'))) {
+        return {
+          code: 2502,
+          msg: 'Proposal not found. Run --propose first.',
+          data: { command: 'develop', change, stage },
+          warnings: [],
+        };
+      }
+      // TODO: 实现 design 阶段（读取 repo facts）
+      warnings.push('Design stage not yet implemented');
+      break;
+
+    case 'tasks':
+      // 检查上游文档
+      if (!existsSync(join(storage.canonicalRoot, 'proposal.md')) && 
+          !existsSync(join(storage.legacyRoot, 'proposal.md'))) {
+        return {
+          code: 2504,
+          msg: 'Upstream documents missing. Run previous stages first.',
+          data: { command: 'develop', change, stage },
+          warnings: [],
+        };
+      }
+      // TODO: 实现 tasks 阶段
+      warnings.push('Tasks stage not yet implemented');
+      break;
+
+    case 'check':
+      // 只读验证一致性
+      // TODO: 实现 check 阶段
+      warnings.push('Check stage not yet implemented');
+      break;
+
+    case 'apply':
+      // 按 DAG 执行任务
+      // TODO: 实现 apply 阶段
+      warnings.push('Apply stage not yet implemented');
+      break;
+
+    case 'archive':
+      // 归档变更
+      // TODO: 实现 archive 阶段
+      warnings.push('Archive stage not yet implemented');
+      break;
   }
 
-  const storage = resolveStorage(cwd, change);
-  const stage = detectStage(storage);
-  const artifacts: string[] = [];
-
-  if (stage === 'propose' && storage.status === 'missing') {
-    // Create proposal
-    const proposalDir = storage.canonicalRoot;
-    if (!dryRun) {
-      mkdirSync(proposalDir, { recursive: true });
-      const proposalContent = `---\nmode: full\ntest-strategy: tdd\n---\n\n# ${change}\n\n## Background\n\nTODO: Describe the business intent.\n\n## Capabilities\n\nTODO: List capabilities.\n`;
-      writeFileSync(join(proposalDir, 'proposal.md'), proposalContent);
-    }
-    artifacts.push(`${storage.canonicalRoot.replace(cwd + '/', '')}/proposal.md`);
+  if (dryRun) {
+    warnings.push('Dry-run mode: no files were written');
   }
 
   return {
@@ -104,6 +242,6 @@ export async function runDevelopCommand(context: CommandContext): Promise<CliRes
       artifacts,
       storageStatus: storage.status,
     },
-    warnings: dryRun ? ['Dry-run mode: no files were written'] : [],
+    warnings,
   };
 }
