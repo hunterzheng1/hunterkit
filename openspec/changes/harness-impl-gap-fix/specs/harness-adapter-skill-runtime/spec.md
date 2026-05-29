@@ -148,7 +148,8 @@
 - [ ] `src/adapters/projection-renderer.ts`：完善 frontmatter 生成
 - [ ] `src/adapters/registry.ts`：添加 Copilot/Cursor adapter 定义
 - [ ] `src/adapters/projection-writer.ts`：生成 `openai.yaml` 和 `copilot-instructions.md`
-- [ ] `src/commands/config.ts`：实现 `--repair-adapters` 和 `--migrate-*`
+- [ ] `src/adapters/source-manager.ts`：管理 `.harness/adapters/shared/skills/harness/` 下的源模板（references/scripts/assets），确保 `--repair-adapters` 可从中重新生成投影
+- [ ] `src/commands/config.ts`：实现 `--repair-adapters`；逐一实现 `--migrate-docsync`、`--migrate-sdd`、`--migrate-review`、`--migrate-docs` 四个迁移参数，消除硬编码
 
 ### 4.2 外部依赖
 

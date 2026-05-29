@@ -50,6 +50,14 @@
 - **当** 用户执行 `harness sync --docs unknown`
 - **预期** 系统必须返回错误码 2402 并提示未知文档类型
 
+#### 需求项：默认只更新 generated block 或用户确认区域
+
+系统必须默认只更新 generated block 或用户确认区域，不触碰非托管用户内容。
+
+##### 场景：保护非托管内容
+- **当** 用户执行 `harness sync`
+- **预期** 系统必须只更新配置中声明的 managed 文档内的 generated block，禁止覆盖非托管用户内容；若写入会覆盖用户内容，必须返回错误码 2403
+
 #### 需求项：`REVIEW_REQUIRED` 标注
 
 系统必须将无法从仓库事实中确定的内容标记为 `REVIEW_REQUIRED`。
@@ -123,7 +131,9 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/capabilities/sync/command.ts`：实现 `--check`、`--fast`、`--docs` 参数解析和漂移检测逻辑
+- [ ] `src/capabilities/sync/command.ts`：实现 `--check`、`--fast`、`--docs` 参数解析和漂移检测逻辑；高风险变更自动从 `--fast` 升级为完整检查；报告写入 `.harness/reports/sync/*.md`
+- [ ] `src/adapters/drift-detector.ts`：补全 `--check` 漂移检测逻辑，支持高风险变更自动从 `--fast` 升级为完整检查
+- [ ] `src/core/legacy-sources.ts`：兼容读取旧目录（`.docsync/`）逻辑
 
 ### 4.2 外部依赖
 
@@ -164,7 +174,7 @@
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（5 个需求项，9 个场景）
+> - [x] 每个需求项至少有一个场景（6 个需求项，10 个场景）
 > - [x] 使用「必须」强制要求
 > - [x] 所有接口参数已量化
 > - [x] 物理约束已量化

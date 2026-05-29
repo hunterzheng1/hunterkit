@@ -166,6 +166,7 @@
 
 ### 4.1 内部依赖
 - [ ] `src/capabilities/knowledge/command.ts`：迁移到 SQLite FTS5、实现 `--index` 索引构建/刷新、实现 `--search`
+- [ ] `src/core/legacy-sources.ts`：兼容读取旧目录（`openspec/changes/**/archive`、`.kld-review/`、`.docsync/`）作为只读索引来源
 
 ### 4.2 外部依赖
 

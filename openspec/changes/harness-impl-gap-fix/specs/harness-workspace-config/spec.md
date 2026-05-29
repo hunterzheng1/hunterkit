@@ -20,7 +20,7 @@
 
 ##### 场景：创建遗漏目录
 - **当** 用户完成 Harness 初始化
-- **预期** 系统必须创建 `.harness/docs/`、`.harness/rules/`、`.harness/events/`、`.harness/develop/archive/`、`.harness/develop/templates/`、`.harness/reports/sync/`、`.harness/reports/develop/`、`.harness/reports/review/` 目录
+- **预期** 系统必须创建 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`.harness/develop/archive/`、`.harness/develop/templates/`、`.harness/reports/sync/`、`.harness/reports/develop/`、`.harness/reports/review/` 目录
 
 ##### 场景：目录幂等创建
 - **当** 部分目录已存在
@@ -52,7 +52,7 @@
 
 ##### 场景：完整配置校验
 - **当** 命令读取 `harness.config.json`
-- **预期** 系统必须校验 `schemaVersion`、`project`、`aiTools`、`capabilities`、`documents`（含 `managed` 和 `generatedBlockPrefix`）、`orchestration`、`safety` 字段完整
+- **预期** 系统必须校验 `schemaVersion`、`project`、`aiTools`、`capabilities`、`documents`（含 `managed` 和 `generatedBlockPrefix`）、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）字段完整
 
 ### 移除需求
 
@@ -78,9 +78,21 @@
 #### 新增目录清单
 
 ```text
-.harness/docs/
-.harness/rules/
+.harness/docs/adr/
+.harness/docs/architecture/
+.harness/docs/decisions/
+.harness/rules/default.md
+.harness/rules/override.md
+.harness/rules/generated.md
 .harness/events/
+.harness/facts/
+.harness/generated/
+.harness/state/
+.harness/cache/
+.harness/adapters/claude/
+.harness/adapters/codex/
+.harness/adapters/copilot/
+.harness/adapters/cursor/
 .harness/develop/archive/
 .harness/develop/templates/
 .harness/reports/sync/
@@ -110,7 +122,7 @@
 ### 3.1 性能约束
 | 指标 | 约束值 | 说明 |
 |------|-------|------|
-| 目录创建时间 | < 500 毫秒 (P95) | 8 个目录 |
+| 目录创建时间 | < 500 毫秒 (P95) | 约 18 个目录（含子目录） |
 | 配置文件生成时间 | < 300 毫秒 (P95) | 3 个配置文件 |
 
 ### 3.2 资源约束
@@ -126,8 +138,8 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/core/workspace.ts`：补全目录创建逻辑
-- [ ] `src/core/config-schema.ts`：补全配置 schema 校验
+- [ ] `src/core/workspace.ts`：补全 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录
+- [ ] `src/core/config-schema.ts`：确保 `harness.config.json` 包含 `documents.generatedBlockPrefix`、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）等完整字段；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置 schema
 
 ### 4.2 外部依赖
 
@@ -168,7 +180,7 @@
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（3 个需求项，7 个场景）
+> - [x] 每个需求项至少有一个场景（3 个需求项，7 个场景，约 18 个目录含子目录）
 > - [x] 使用「必须」强制要求
 > - [x] 所有接口参数已量化
 > - [x] 物理约束已量化

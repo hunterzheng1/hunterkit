@@ -143,8 +143,8 @@ test-strategy: "tdd"
 
 - [x] `personal-dev-tool-harness` 变更已完成实施并归档
 - [x] 9 个 Capability 的 spec.md 已同步到 `openspec/specs/`
-- [ ] 确认 SQLite FTS5 npm 包选择（`better-sqlite3` vs `sqlite3`）
-- [ ] 确认 Claude/Codex Hook schema 版本
+- [x] 确认 SQLite FTS5 npm 包选择（`better-sqlite3 >= 9.0.0`）
+- [x] 确认 Claude/Codex Hook schema 版本（v1）
 
 ---
 

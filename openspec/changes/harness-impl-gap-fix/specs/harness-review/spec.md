@@ -100,11 +100,11 @@
 
 #### 需求项：6 个并行 review agent + N 个 finding validator
 
-系统必须实现 6 个并行 review agent 和 N 个 finding validator。
+编排器本身不做实质审查，系统必须实现 6 个并行 review agent 和 N 个 finding validator。review agent 必须读完整相关源码而非仅看 diff。
 
 ##### 场景：并行审查
 - **当** 审查范围超过 3 个文件或用户传入 `--full`
-- **预期** 系统必须并行启动 6 个 reviewer（rules-reviewer、bug-scanner、deep-bug-analyzer、history-reviewer、standards-reviewer、contract-reviewer）
+- **预期** 系统必须并行启动 6 个 reviewer（rules-reviewer、bug-scanner、deep-bug-analyzer、history-reviewer、standards-reviewer、contract-reviewer），每个 reviewer 必须读完整相关源码而非仅看 diff
 
 ##### 场景：finding validator
 - **当** reviewer 生成候选 finding
@@ -129,6 +129,14 @@
 ##### 场景：报告路径
 - **当** review 完成
 - **预期** 系统必须写入 `.harness/reports/review/<timestamp>-<branch>.md` 和 `.harness/reports/review/<timestamp>-<branch>.json`，其中 `<timestamp>` 为 ISO 8601 格式，`<branch>` 为当前分支名
+
+#### 需求项：用户可见内容使用简体中文
+
+系统必须确保 review 报告中的用户可见内容使用简体中文。
+
+##### 场景：报告语言
+- **当** review 生成 Markdown 或 JSON 报告
+- **预期** 报告中所有用户可见的描述、摘要、建议文本必须使用简体中文
 
 ### 移除需求
 
@@ -196,7 +204,7 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/capabilities/review/command.ts`：实现范围参数、`--full`、`--lite`、`--comment`、JSON 报告、严重度分级、交互式范围选择、置信度过滤、去重、报告写入
+- [ ] `src/capabilities/review/command.ts`：实现 `--local`/`--staged`/`--scan` 范围参数、`--full`、`--lite`、`--comment`、`--fix`/`--no-fix`、JSON 报告、严重度分级；实现交互式范围选择；编排器本身不做实质审查；实现置信度过滤（confidence < 80 丢弃）和去重；报告写入 `.harness/reports/review/<timestamp>-<branch>.md/.json`；用户可见内容使用简体中文
 
 ### 4.2 外部依赖
 
@@ -241,7 +249,7 @@
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（10 个需求项，18 个场景）
+> - [x] 每个需求项至少有一个场景（11 个需求项，19 个场景）
 > - [x] 使用「必须」强制要求
 > - [x] 所有接口参数已量化
 > - [x] 物理约束已量化

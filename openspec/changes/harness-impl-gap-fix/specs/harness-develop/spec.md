@@ -14,9 +14,9 @@
 
 ### 修改需求
 
-#### 需求项：多阶段支持（spec/design/tasks/check/apply/archive）
+#### 需求项：多阶段支持（propose/spec/design/tasks/check/apply/archive）
 
-系统必须实现 `harness develop <change>` 的完整多阶段支持，而非仅 propose 阶段。
+系统必须实现 `harness develop <change>` 的完整多阶段支持（含 `--propose` 参数），而非仅 propose 阶段的 stub 实现。
 
 ##### 场景：spec 阶段
 - **当** 用户执行 `harness develop add-review-workflow --spec`
@@ -178,8 +178,9 @@
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/capabilities/develop/command.ts`：实现多阶段、`--capability`、`--no-parallel`、canonical storage、兼容读取、design 读取 facts、apply DAG 并行
+- [ ] `src/capabilities/develop/command.ts`：实现 propose/spec/design/tasks/check/apply/archive 多阶段（含 `--propose` 参数）；实现默认自动阶段检测；实现 `--capability`、`--no-parallel` 参数；阶段文件写入 `.harness/develop/changes/` canonical storage；兼容读取旧 `openspec/changes/**`；design 阶段读取 repo facts；apply 阶段按任务 DAG 并行执行无依赖任务，共享文件修改必须串行
 - [ ] `src/core/paths.ts`：确保 develop canonical storage 路径正确定义
+- [ ] `src/core/legacy-sources.ts`：兼容读取旧目录（`openspec/changes/**`）逻辑
 
 ### 4.2 外部依赖
 

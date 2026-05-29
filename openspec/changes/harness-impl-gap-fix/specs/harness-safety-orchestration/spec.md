@@ -16,7 +16,7 @@
 
 #### 需求项：5 个 Hook 脚本生成
 
-系统必须生成 5 个 Hook 脚本：dangerous-command、sync-after-doc-change、review-before-push、session-summary、compact-state。
+系统必须生成 5 个 Hook 脚本：dangerous-command、sync-after-doc-change、review-before-push、session-summary、compact-state。Hook 实现必须遵循四条原则：不做复杂 AI 判断、输出必须结构化、不直接修代码、只调用 `harness` CLI 或小脚本。
 
 ##### 场景：生成 dangerous-command Hook
 - **当** 用户选择安装 Hook（向导步骤 6 选择"仅危险命令阻断"或"完整质量门"）
@@ -64,7 +64,7 @@
 
 ##### 场景：生成代码生成 agent
 - **当** 用户选择安装 Subagent
-- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-implementer.md`、`harness-test-reviewer.md`、`harness-contract-validator.md`、`harness-doc-sync-reviewer.md` 四个代码生成 agent
+- **预期** 系统必须生成 `.harness/adapters/claude/agents/harness-implementer.md`、`harness-test-reviewer.md`、`harness-impl-contract-validator.md`、`harness-doc-sync-reviewer.md` 四个代码生成 agent
 
 ##### 场景：生成 review agent
 - **当** 用户选择安装 Subagent
