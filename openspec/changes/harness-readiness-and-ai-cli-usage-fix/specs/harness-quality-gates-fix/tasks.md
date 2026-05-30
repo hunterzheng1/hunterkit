@@ -77,8 +77,8 @@
   4. 验证 `npm pack --dry-run` 输出含 `dist/`
 
 - **验收标准**:
-  - [ ] 4 个门禁测试用例存在（预期 typecheck/lint 失败）
-  - [ ] 构建和测试通过
+  - [x] 4 个门禁测试用例存在（预期 typecheck/lint 失败）
+  - [x] 构建和测试通过
 
 - **关联设计**: design.md §4.1
 
@@ -101,8 +101,8 @@
   4. 安装 `@typescript-eslint/parser` 和 `@typescript-eslint/eslint-plugin`（如需要）
 
 - **验收标准**:
-  - [ ] `npm run lint` 不报"找不到配置"错误
-  - [ ] ESLint 能解析 `src/` 和 `test/` 目录
+  - [x] `npm run lint` 不报"找不到配置"错误
+  - [x] ESLint 能解析 `src/` 和 `test/` 目录
 
 - **关联设计**: design.md §4.2
 
@@ -124,8 +124,8 @@
   3. 检查所有 import 路径是否一致
 
 - **验收标准**:
-  - [ ] `import { Transaction } from '../core/transaction.js'` 不报类型错误
-  - [ ] TSC 针对此文件的错误清零
+  - [x] `import { Transaction } from '../core/transaction.js'` 不报类型错误
+  - [x] TSC 针对此文件的错误清零
 
 ---
 
@@ -145,8 +145,8 @@
   3. 统一为 `'P0' | 'P1' | 'P2' | 'info' | 'warning'` 或等价联合类型
 
 - **验收标准**:
-  - [ ] severity 类型与 classifySeverity 返回值一致
-  - [ ] `npm run typecheck -- src/capabilities/review/` 通过
+  - [x] severity 类型与 classifySeverity 返回值一致
+  - [x] `npm run typecheck -- src/capabilities/review/` 通过
 
 - **关联设计**: design.md §4.3
 
@@ -168,8 +168,8 @@
   3. 增加类型守卫避免不安全类型断言
 
 - **验收标准**:
-  - [ ] `buildConfigFromAnswers()` 返回值通过 TypeScript 类型检查
-  - [ ] 所有必需字段有显式默认值
+  - [x] `buildConfigFromAnswers()` 返回值通过 TypeScript 类型检查
+  - [x] 所有必需字段有显式默认值
 
 ---
 
@@ -191,8 +191,8 @@
   5. `npm pack --dry-run` → 验证输出
 
 - **验收标准**:
-  - [ ] 4 个门禁命令全部返回退出码 0
-  - [ ] `test/quality-gates.test.ts` 全部通过
+  - [x] 4 个门禁命令全部返回退出码 0
+  - [x] `test/quality-gates.test.ts` 全部通过
 
 ---
 
@@ -200,11 +200,11 @@
 
 ### 4.1 手动验证清单
 
-- [ ] `npm run typecheck` 零错误
-- [ ] `npm run lint` 零 error
-- [ ] `npm run build` 成功
-- [ ] `npm test` 全部通过
-- [ ] `npm pack --dry-run` 输出含 `dist/` + `README.md`
+- [x] `npm run typecheck` 零错误
+- [x] `npm run lint` 零 error
+- [x] `npm run build` 成功
+- [x] `npm test` 全部通过
+- [x] `npm pack --dry-run` 输出含 `dist/` + `README.md`
 
 ---
 

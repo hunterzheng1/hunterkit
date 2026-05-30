@@ -57,7 +57,7 @@ TypeScript 5.5+ / commander 12.1
   3. 交互式入口 AI CLI 提示测试
 
 - **验收标准**:
-  - [ ] 3 个测试用例存在（预期部分失败）
+  - [x] 3 个测试用例存在（预期部分失败）
 
 ---
 
@@ -77,8 +77,8 @@ TypeScript 5.5+ / commander 12.1
   3. 调用 `writeCliResponse` 输出
 
 - **验收标准**:
-  - [ ] `--help --json` stdout 为合法 JSON
-  - [ ] data.commands 数组含 8 个命令
+  - [x] `--help --json` stdout 为合法 JSON
+  - [x] data.commands 数组含 8 个命令
 
 - **关联设计**: design.md §4.1
 
@@ -100,8 +100,8 @@ TypeScript 5.5+ / commander 12.1
   3. 在操作菜单展示 AI CLI 上下文
 
 - **验收标准**:
-  - [ ] 设置 `CLAUDE_CODE_SESSION_ID` 后向导显示 "Claude Code"
-  - [ ] 未知环境不显示 AI 工具名
+  - [x] 设置 `CLAUDE_CODE_SESSION_ID` 后向导显示 "Claude Code"
+  - [x] 未知环境不显示 AI 工具名
 
 - **关联设计**: design.md §4.2
 
@@ -114,15 +114,15 @@ TypeScript 5.5+ / commander 12.1
 - **状态**: [x] 已完成
 
 **验收标准**:
-- [ ] `test/cli-entrypoint-extra.test.ts` 全部通过
-- [ ] `npm run typecheck` 通过
+- [x] `test/cli-entrypoint-extra.test.ts` 全部通过
+- [x] `npm run typecheck` 通过
 
 ---
 
 ## 4. 验证方式
 
-- [ ] `node dist/bin/harness.js --help --json` 输出合法 JSON
-- [ ] `CLAUDE_CODE_SESSION_ID=1 node dist/bin/harness.js` 向导显示 Claude Code
+- [x] `node dist/bin/harness.js --help --json` 输出合法 JSON
+- [x] `CLAUDE_CODE_SESSION_ID=1 node dist/bin/harness.js` 向导显示 Claude Code
 
 ---
 

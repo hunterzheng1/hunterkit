@@ -60,7 +60,7 @@ TypeScript 5.5+ / Markdown
   5. 测试词边界（不误伤正常单词）
 
 - **验收标准**:
-  - [ ] 5 个测试用例存在（预期失败）
+  - [x] 5 个测试用例存在（预期失败）
 
 ---
 
@@ -79,8 +79,8 @@ TypeScript 5.5+ / Markdown
   3. 清理多余空白
 
 - **验收标准**:
-  - [ ] 测试通过（5/5）
-  - [ ] `npm run typecheck` 通过
+  - [x] 测试通过（5/5）
+  - [x] `npm run typecheck` 通过
 
 - **关联设计**: design.md §4.1
 
@@ -103,8 +103,8 @@ TypeScript 5.5+ / Markdown
   3. 更新 Skill body 示例为 AI CLI 口径
 
 - **验收标准**:
-  - [ ] 6 个文件不含内部来源名
-  - [ ] Skill 示例改为"当用户说...时"格式
+  - [x] 6 个文件不含内部来源名
+  - [x] Skill 示例改为"当用户说...时"格式
 
 ---
 
@@ -123,8 +123,8 @@ TypeScript 5.5+ / Markdown
   2. 在 `renderBody()` 返回前调用过滤
 
 - **验收标准**:
-  - [ ] 生成的 SKILL.md 不含内部来源名
-  - [ ] 全量投影生成正常
+  - [x] 生成的 SKILL.md 不含内部来源名
+  - [x] 全量投影生成正常
 
 ---
 
@@ -135,9 +135,9 @@ TypeScript 5.5+ / Markdown
 - **状态**: [x] 已完成
 
 - **验收标准**:
-  - [ ] `test/name-sanitizer.test.ts` 5/5 通过
-  - [ ] `node dist/bin/harness.js config --repair-adapters` 后投影文件不含内部名
-  - [ ] `npm run lint` + `npm run typecheck` 通过
+  - [x] `test/name-sanitizer.test.ts` 5/5 通过
+  - [x] `node dist/bin/harness.js config --repair-adapters` 后投影文件不含内部名
+  - [x] `npm run lint` + `npm run typecheck` 通过
 
 ---
 

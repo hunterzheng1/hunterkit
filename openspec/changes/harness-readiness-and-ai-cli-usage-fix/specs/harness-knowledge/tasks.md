@@ -58,7 +58,7 @@ TypeScript 5.5+ / better-sqlite3 11+
   4. 测试 JSON fallback warnings 含降级提示
 
 - **验收标准**:
-  - [ ] 4 个测试用例存在（预期部分失败）
+  - [x] 4 个测试用例存在（预期部分失败）
 
 ---
 
@@ -79,10 +79,10 @@ TypeScript 5.5+ / better-sqlite3 11+
   4. 响应 `data` 含 `storageBackend`
 
 - **验收标准**:
-  - [ ] `data.storageBackend` 字段存在
-  - [ ] SQLite 不可用时返回 code 0（非 2704）
-  - [ ] warnings 含 JSON fallback 提示
-  - [ ] `npm run typecheck` 通过
+  - [x] `data.storageBackend` 字段存在
+  - [x] SQLite 不可用时返回 code 0（非 2704）
+  - [x] warnings 含 JSON fallback 提示
+  - [x] `npm run typecheck` 通过
 
 - **关联设计**: design.md §4.1
 
@@ -104,8 +104,8 @@ TypeScript 5.5+ / better-sqlite3 11+
   3. 更新 `data.indexPath` 反映实际路径
 
 - **验收标准**:
-  - [ ] fallback 模式下生成 `knowledge.json` 非 `knowledge.sqlite`
-  - [ ] search 能正确读取 fallback 文件
+  - [x] fallback 模式下生成 `knowledge.json` 非 `knowledge.sqlite`
+  - [x] search 能正确读取 fallback 文件
 
 - **关联设计**: design.md §4.2 & §5.1
 
@@ -118,8 +118,8 @@ TypeScript 5.5+ / better-sqlite3 11+
 - **状态**: [x] 已完成
 
 - **验收标准**:
-  - [ ] `test/knowledge-backend.test.ts` 4/4 通过
-  - [ ] `npm run typecheck` 通过
+  - [x] `test/knowledge-backend.test.ts` 4/4 通过
+  - [x] `npm run typecheck` 通过
 
 ---
 

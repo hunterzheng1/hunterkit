@@ -58,7 +58,7 @@ TypeScript 5.5+
   4. 测试 warnings 含 M1 受限标注
 
 - **验收标准**:
-  - [ ] 4 个测试用例存在（预期部分失败）
+  - [x] 4 个测试用例存在（预期部分失败）
 
 ---
 
@@ -78,8 +78,8 @@ TypeScript 5.5+
   3. 在 JSON 报告中包含 source
 
 - **验收标准**:
-  - [ ] `ReviewFinding.source` 类型正确
-  - [ ] `npm run typecheck` 通过
+  - [x] `ReviewFinding.source` 类型正确
+  - [x] `npm run typecheck` 通过
 
 - **关联设计**: design.md §4.1
 
@@ -102,9 +102,9 @@ TypeScript 5.5+
   4. 保留现有启发式扫描逻辑不变
 
 - **验收标准**:
-  - [ ] `data.reviewMode === "heuristic"`
-  - [ ] `--comment` 返回 code 2606
-  - [ ] 多 agent 模式有 warning
+  - [x] `data.reviewMode === "heuristic"`
+  - [x] `--comment` 返回 code 2606
+  - [x] 多 agent 模式有 warning
 
 - **关联设计**: design.md §4.2
 
@@ -117,8 +117,8 @@ TypeScript 5.5+
 - **状态**: [x] 已完成
 
 - **验收标准**:
-  - [ ] `test/review-m1-boundary.test.ts` 4/4 通过
-  - [ ] `npm run typecheck` + `npm run lint` 通过
+  - [x] `test/review-m1-boundary.test.ts` 4/4 通过
+  - [x] `npm run typecheck` + `npm run lint` 通过
 
 ---
 

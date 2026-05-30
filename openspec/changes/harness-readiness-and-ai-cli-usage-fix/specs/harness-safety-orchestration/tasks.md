@@ -60,7 +60,7 @@ TypeScript 5.5+ / Bash / Markdown
   4. 测试 status 输出含 safety 能力矩阵
 
 - **验收标准**:
-  - [ ] 4 个测试用例存在（预期部分失败）
+  - [x] 4 个测试用例存在（预期部分失败）
 
 ---
 
@@ -80,8 +80,8 @@ TypeScript 5.5+ / Bash / Markdown
   3. 确保 `--repair-adapters` 能基于标注识别和更新
 
 - **验收标准**:
-  - [ ] 生成的 .sh 脚本首行含模板注释
-  - [ ] 生成的 JSON 配置文件含 `_generated_by`
+  - [x] 生成的 .sh 脚本首行含模板注释
+  - [x] 生成的 JSON 配置文件含 `_generated_by`
 
 - **关联设计**: design.md §4.1 & §4.2
 
@@ -102,8 +102,8 @@ TypeScript 5.5+ / Bash / Markdown
   2. 增加 `_note` 说明"本 agent 为模板定义，实际编排后续版本"
 
 - **验收标准**:
-  - [ ] 生成的 agent 文件含 `_status: "template"`
-  - [ ] `--repair-adapters` 后 agent 文件保留标注
+  - [x] 生成的 agent 文件含 `_status: "template"`
+  - [x] `--repair-adapters` 后 agent 文件保留标注
 
 - **关联设计**: design.md §4.3
 
@@ -124,8 +124,8 @@ TypeScript 5.5+ / Bash / Markdown
   2. 读取事件时兼容 `skywalk-sdd/` 作为只读源
 
 - **验收标准**:
-  - [ ] 新事件写入 `.harness/events/` 路径
-  - [ ] 旧 `skywalk-sdd/` 事件可正常读取
+  - [x] 新事件写入 `.harness/events/` 路径
+  - [x] 旧 `skywalk-sdd/` 事件可正常读取
 
 - **关联设计**: design.md §2.2
 
@@ -147,8 +147,8 @@ TypeScript 5.5+ / Bash / Markdown
   3. doctor 诊断 Hook 时标注模板性质
 
 - **验收标准**:
-  - [ ] `harness status --json` safety 节点含功能状态矩阵
-  - [ ] doctor 输出标注 Hook 为模板
+  - [x] `harness status --json` safety 节点含功能状态矩阵
+  - [x] doctor 输出标注 Hook 为模板
 
 - **关联设计**: design.md §6.1 步骤 5
 
@@ -161,10 +161,10 @@ TypeScript 5.5+ / Bash / Markdown
 - **状态**: [x] 已完成
 
 - **验收标准**:
-  - [ ] `test/safety-template-markers.test.ts` 4/4 通过
-  - [ ] `node dist/bin/harness.js config --repair-adapters` 后标注正确
-  - [ ] 新事件写入 `.harness/events/`
-  - [ ] `npm run typecheck` 通过
+  - [x] `test/safety-template-markers.test.ts` 4/4 通过
+  - [x] `node dist/bin/harness.js config --repair-adapters` 后标注正确
+  - [x] 新事件写入 `.harness/events/`
+  - [x] `npm run typecheck` 通过
 
 ---
 

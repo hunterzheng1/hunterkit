@@ -58,7 +58,7 @@ TypeScript 5.5+
   4. legacy 检测 → warning 含迁移建议
 
 - **验收标准**:
-  - [ ] 8 个测试用例存在（预期部分失败）
+  - [x] 8 个测试用例存在（预期部分失败）
 
 ---
 
@@ -80,9 +80,9 @@ TypeScript 5.5+
   5. legacy/mixed → 增加迁移建议 warning
 
 - **验收标准**:
-  - [ ] `data.status` 正确反映阶段状态
-  - [ ] apply 返回 code 2505
-  - [ ] `npm run typecheck` 通过
+  - [x] `data.status` 正确反映阶段状态
+  - [x] apply 返回 code 2505
+  - [x] `npm run typecheck` 通过
 
 - **关联设计**: design.md §4.1 & §4.2
 
@@ -103,7 +103,7 @@ TypeScript 5.5+
   2. 每个阶段标记 `available` 或 `next_version`
 
 - **验收标准**:
-  - [ ] `harness status --json` 输出含 develop 7 阶段状态
+  - [x] `harness status --json` 输出含 develop 7 阶段状态
 
 - **关联设计**: design.md §4.3
 
@@ -116,8 +116,8 @@ TypeScript 5.5+
 - **状态**: [x] 已完成
 
 - **验收标准**:
-  - [ ] `test/develop-stage-status.test.ts` 8/8 通过
-  - [ ] `npm run typecheck` + `npm run lint` 通过
+  - [x] `test/develop-stage-status.test.ts` 8/8 通过
+  - [x] `npm run typecheck` + `npm run lint` 通过
 
 ---
 

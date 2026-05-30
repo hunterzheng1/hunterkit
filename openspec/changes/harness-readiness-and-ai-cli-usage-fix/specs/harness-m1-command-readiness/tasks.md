@@ -77,8 +77,8 @@
   3. 验证退出码、JSON 输出、产物存在、dry-run 零写入
 
 - **验收标准**:
-  - [ ] 12 个测试用例存在（有些可能因 fixture 未创建而失败）
-  - [ ] 覆盖 inspect/sync/review/status/doctor/config --repair-adapters
+  - [x] 12 个测试用例存在（有些可能因 fixture 未创建而失败）
+  - [x] 覆盖 inspect/sync/review/status/doctor/config --repair-adapters
 
 - **关联设计**: design.md §4.1
 
@@ -101,8 +101,8 @@
   4. git init（为 review 准备 Git 上下文）
 
 - **验收标准**:
-  - [ ] fixture 目录结构完整
-  - [ ] `.harness/config/harness.config.json` 存在
+  - [x] fixture 目录结构完整
+  - [x] `.harness/config/harness.config.json` 存在
 
 - **关联设计**: design.md §5.2
 
@@ -126,9 +126,9 @@
   5. safety 展示 hooks/agents 状态
 
 - **验收标准**:
-  - [ ] `harness status --json` 输出含 `capabilities` 节点
-  - [ ] develop 展示 7 阶段状态矩阵
-  - [ ] safety 展示模板标注
+  - [x] `harness status --json` 输出含 `capabilities` 节点
+  - [x] develop 展示 7 阶段状态矩阵
+  - [x] safety 展示模板标注
 
 - **关联设计**: design.md §4.2
 
@@ -151,8 +151,8 @@
   4. 确认 --dry-run 零写入
 
 - **验收标准**:
-  - [ ] inspect 返回 code 0，`facts/` 目录有文件
-  - [ ] sync --check 返回 code 0，data 含 `drift`/`documents`
+  - [x] inspect 返回 code 0，`facts/` 目录有文件
+  - [x] sync --check 返回 code 0，data 含 `drift`/`documents`
 
 - **关联设计**: design.md §6.1 步骤 1-2
 
@@ -176,9 +176,9 @@
   5. 确认 `--dry-run` 零写入
 
 - **验收标准**:
-  - [ ] `data.reviewMode === "heuristic"`
-  - [ ] 双报告文件存在
-  - [ ] 报告含中文
+  - [x] `data.reviewMode === "heuristic"`
+  - [x] 双报告文件存在
+  - [x] 报告含中文
 
 - **关联设计**: design.md §6.1 步骤 3
 
@@ -200,8 +200,8 @@
   3. 确认 JSON 输出格式正确
 
 - **验收标准**:
-  - [ ] doctor 输出含 `environment`/`workspace`/`dependencies`
-  - [ ] config --repair-adapters 返回 code 0
+  - [x] doctor 输出含 `environment`/`workspace`/`dependencies`
+  - [x] config --repair-adapters 返回 code 0
 
 - **关联设计**: design.md §6.1 步骤 5-6
 
@@ -222,8 +222,8 @@
   2. 修正失败用例
 
 - **验收标准**:
-  - [ ] 12 个测试用例全部通过
-  - [ ] `npm run typecheck` 通过
+  - [x] 12 个测试用例全部通过
+  - [x] `npm run typecheck` 通过
 
 ---
 
@@ -231,12 +231,12 @@
 
 ### 4.1 手动验证清单
 
-- [ ] `node dist/bin/harness.js inspect --json` 在 fixture 上输出合法 JSON
-- [ ] `node dist/bin/harness.js sync --check --json` 输出合法 JSON
-- [ ] `node dist/bin/harness.js review --local` 生成 MD+JSON 报告
-- [ ] `node dist/bin/harness.js status --json` 含完整能力状态
-- [ ] `node dist/bin/harness.js doctor --json` 含环境诊断
-- [ ] `node dist/bin/harness.js config --repair-adapters` 可运行
+- [x] `node dist/bin/harness.js inspect --json` 在 fixture 上输出合法 JSON
+- [x] `node dist/bin/harness.js sync --check --json` 输出合法 JSON
+- [x] `node dist/bin/harness.js review --local` 生成 MD+JSON 报告
+- [x] `node dist/bin/harness.js status --json` 含完整能力状态
+- [x] `node dist/bin/harness.js doctor --json` 含环境诊断
+- [x] `node dist/bin/harness.js config --repair-adapters` 可运行
 
 ---
 

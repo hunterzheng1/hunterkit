@@ -79,8 +79,8 @@
   6. 编写未知命令测试（预期 1001 错误码）
 
 - **验收标准**:
-  - [ ] 6 个测试用例均以骨架形式存在（预期失败）
-  - [ ] 使用 `main(argv, env, io)` 作为测试入口
+  - [x] 6 个测试用例均以骨架形式存在（预期失败）
+  - [x] 使用 `main(argv, env, io)` 作为测试入口
 
 - **关联设计**: design.md §4 & §6
 
@@ -102,8 +102,8 @@
   3. 检查 TypeScript 编译
 
 - **验收标准**:
-  - [ ] `CommandContext` 含 `args: string[]`
-  - [ ] `npm run typecheck -- src/cli/types.ts` 通过
+  - [x] `CommandContext` 含 `args: string[]`
+  - [x] `npm run typecheck -- src/cli/types.ts` 通过
 
 - **关联设计**: design.md §4 接口 3
 
@@ -126,9 +126,9 @@
   4. 提前 return 0
 
 - **验收标准**:
-  - [ ] `node dist/bin/harness.js --help` 有完整输出
-  - [ ] `node dist/bin/harness.js --help --json` stdout 为合法 JSON
-  - [ ] help 文本包含 8 个命令名称
+  - [x] `node dist/bin/harness.js --help` 有完整输出
+  - [x] `node dist/bin/harness.js --help --json` stdout 为合法 JSON
+  - [x] help 文本包含 8 个命令名称
 
 - **关联设计**: design.md §4.1
 
@@ -149,8 +149,8 @@
   2. 确保 handler 可从 `context.args` 读取命令参数
 
 - **验收标准**:
-  - [ ] `develop demo-change --propose` handler 能获取 `args: ['demo-change', '--propose']`
-  - [ ] `knowledge --search demo` handler 能获取 `args: ['--search', 'demo']`
+  - [x] `develop demo-change --propose` handler 能获取 `args: ['demo-change', '--propose']`
+  - [x] `knowledge --search demo` handler 能获取 `args: ['--search', 'demo']`
 
 - **关联设计**: design.md §4 接口 1
 
@@ -172,8 +172,8 @@
   3. 移除不必要的 `as any` 类型断言
 
 - **验收标准**:
-  - [ ] 无 handler 使用 `(context as any).args`
-  - [ ] `npm run typecheck` 通过
+  - [x] 无 handler 使用 `(context as any).args`
+  - [x] `npm run typecheck` 通过
 
 - **关联设计**: design.md §6.2 修改点 4
 
@@ -195,8 +195,8 @@
   3. 修正失败用例
 
 - **验收标准**:
-  - [ ] 6 个测试用例全部通过
-  - [ ] `npm run typecheck` 通过
+  - [x] 6 个测试用例全部通过
+  - [x] `npm run typecheck` 通过
 
 ---
 
@@ -211,10 +211,10 @@
 
 ### 4.2 手动验证清单
 
-- [ ] `node dist/bin/harness.js --help` 有输出
-- [ ] `node dist/bin/harness.js develop demo --propose --json` 返回合法 JSON 且识别 change
-- [ ] `node dist/bin/harness.js knowledge --search demo --json` 返回合法 JSON 且识别 query
-- [ ] `node dist/bin/harness.js unknown-cmd` 返回 1001
+- [x] `node dist/bin/harness.js --help` 有输出
+- [x] `node dist/bin/harness.js develop demo --propose --json` 返回合法 JSON 且识别 change
+- [x] `node dist/bin/harness.js knowledge --search demo --json` 返回合法 JSON 且识别 query
+- [x] `node dist/bin/harness.js unknown-cmd` 返回 1001
 
 ---
 
