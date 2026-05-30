@@ -47,7 +47,7 @@ export async function runInspectCommand(context: CommandContext): Promise<CliRes
   const paths = resolveWorkspacePaths(cwd);
 
   // 解析命令参数
-  const args = (context as any).args || [];
+  const args = context.args || [];
   const parsed = parseInspectArgs(args, cwd);
   const scope: InspectScope = parsed.scope;
   const repoMap = scanProject(cwd, scope);

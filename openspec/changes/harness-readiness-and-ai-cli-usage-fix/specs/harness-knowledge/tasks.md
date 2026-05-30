@@ -46,7 +46,7 @@ TypeScript 5.5+ / better-sqlite3 11+
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试验证 storageBackend 声明和 JSON fallback 路径
 - **输出**: `test/knowledge-backend.test.ts`
@@ -66,7 +66,7 @@ TypeScript 5.5+ / better-sqlite3 11+
 
 - **类型**: 接口层
 - **依赖**: TASK-KNW-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 knowledge 响应中增加 `storageBackend` 字段，SQLite 不可用时降级而非返回 2704
 - **输入**: `src/capabilities/knowledge/command.ts`, `types.ts`
@@ -92,7 +92,7 @@ TypeScript 5.5+ / better-sqlite3 11+
 
 - **类型**: 接口层
 - **依赖**: TASK-KNW-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: JSON fallback 时写入 `.harness/cache/knowledge.json` 而非 `.sqlite`
 - **输入**: `src/capabilities/knowledge/command.ts`
@@ -115,7 +115,7 @@ TypeScript 5.5+ / better-sqlite3 11+
 
 - **类型**: 测试-验证
 - **依赖**: TASK-KNW-02, TASK-KNW-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **验收标准**:
   - [ ] `test/knowledge-backend.test.ts` 4/4 通过

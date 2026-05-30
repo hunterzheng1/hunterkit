@@ -392,7 +392,7 @@ export async function runKnowledgeCommand(context: CommandContext): Promise<CliR
   // 解析参数
   let options;
   try {
-    options = parseKnowledgeArgs((context as any).args || []);
+    options = parseKnowledgeArgs(context.args || []);
   } catch (err: any) {
     return {
       code: err.code || 2701,
@@ -459,10 +459,14 @@ export async function runKnowledgeCommand(context: CommandContext): Promise<CliR
     msg: 'success',
     data: {
       command: 'knowledge',
+      storageBackend: existsSync(dbPath) ? 'sqlite-fts5' : 'json-fallback',
       indexPath: relative(cwd, dbPath),
       indexedFiles,
       results,
     },
-    warnings: dryRun ? ['Dry-run mode: no index was written'] : [],
+    warnings: [
+      ...(dryRun ? ['Dry-run mode: no index was written'] : []),
+      ...(!existsSync(dbPath) || options.index ? ['当前使用 JSON 文件存储，全文检索精度和性能受限。安装 better-sqlite3 以启用 SQLite FTS5 完整索引。'] : []),
+    ],
   };
 }

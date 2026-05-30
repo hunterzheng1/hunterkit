@@ -128,7 +128,7 @@ export async function runSyncCommand(context: CommandContext): Promise<CliRespon
   const factsPath = resolve(paths.facts, 'repo-map.json');
 
   // 解析命令参数
-  const args = (context as any).args || [];
+  const args = context.args || [];
   let parsed: ParsedSyncArgs;
   try {
     parsed = parseSyncArgs(args);

@@ -46,7 +46,7 @@ TypeScript 5.5+
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试覆盖 reviewMode、source 字段、--comment 2606、M1 warning
 - **输出**: `test/review-m1-boundary.test.ts`
@@ -66,7 +66,7 @@ TypeScript 5.5+
 
 - **类型**: 数据层
 - **依赖**: TASK-REV-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 扩展 `ReviewFinding` 接口，增加 `source` 字段
 - **输入**: `src/capabilities/review/types.ts`
@@ -89,7 +89,7 @@ TypeScript 5.5+
 
 - **类型**: 接口层
 - **依赖**: TASK-REV-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 review 响应中增加 reviewMode 字段，--comment 返回 2606
 - **输入**: `src/capabilities/review/command.ts`
@@ -114,7 +114,7 @@ TypeScript 5.5+
 
 - **类型**: 测试-验证
 - **依赖**: TASK-REV-02, TASK-REV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **验收标准**:
   - [ ] `test/review-m1-boundary.test.ts` 4/4 通过

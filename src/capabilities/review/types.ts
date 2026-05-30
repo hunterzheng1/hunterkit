@@ -17,10 +17,11 @@ export interface ReviewOptions {
 export interface ReviewFinding {
   file: string;
   line: number;
-  severity: 'P0' | 'P1' | 'P2';
+  severity: 'P0' | 'P1' | 'P2' | 'info' | 'warning';
   category: string;
   message: string;
   suggestion?: string;
+  source: 'heuristic' | `agent:${string}`;
 }
 
 export interface ReviewResult {

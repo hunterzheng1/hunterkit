@@ -161,6 +161,44 @@ export async function main(
   io: CliIo,
 ): Promise<number> {
   try {
+    // 0. Help detection — check original argv before commander consumes the flags
+    const isHelp = argv.includes('--help') || argv.includes('-h');
+    const wantsJson = argv.includes('--json');
+
+    // Help mode: handle before parseGlobalOptions to avoid commander exitOverride
+    if (isHelp) {
+      const registry = createCommandRegistry();
+      registerAllHandlers(registry);
+      if (wantsJson) {
+        const commands = registry.list().map(h => ({
+          name: h.name,
+          description: h.description,
+          requiresInitializedWorkspace: h.requiresInitializedWorkspace,
+        }));
+        writeCliResponse({ code: 0, msg: 'success', data: { commands }, warnings: [] },
+          { json: true, noColor: false, io });
+        return 0;
+      }
+      const cmds = registry.list();
+      const lines: string[] = [];
+      lines.push('Usage: harness <command> [options]');
+      lines.push('');
+      lines.push('Commands:');
+      for (const c of cmds) {
+        const initNote = c.requiresInitializedWorkspace ? ' (requires init)' : '';
+        lines.push(`  ${c.name.padEnd(15)} ${c.description}${initNote}`);
+      }
+      lines.push('');
+      lines.push('Global Options:');
+      lines.push('  --cwd <path>     Project root directory');
+      lines.push('  --dry-run        Preview mode - no actual file writes');
+      lines.push('  --json           Output as pure JSON');
+      lines.push('  --no-color       Disable ANSI color codes');
+      lines.push('  --help, -h       Show this help message');
+      io.stdout.write(lines.join('\n') + '\n');
+      return 0;
+    }
+
     // 1. Parse global options and command
     const { parsedCommand, globalOptions } = parseGlobalOptions(argv);
 
@@ -171,6 +209,8 @@ export async function main(
     // 3. Route: interactive or command
     let response: CliResponse;
 
+    const commandArgs = parsedCommand.commandArgs ?? [];
+
     if (!parsedCommand.command) {
       // No command - enter interactive mode
       const context: CommandContext = {
@@ -178,6 +218,7 @@ export async function main(
         command: '',
         io,
         registry,
+        args: commandArgs,
       };
       response = await runInteractiveEntrypoint(context);
 
@@ -202,7 +243,7 @@ export async function main(
       const handler = registry.resolve(parsedCommand.command);
 
       if (!handler) {
-        throw new HarnessCliError(1001, `Unknown command: ${parsedCommand.command}`);
+        throw new HarnessCliError(1001, `Unknown command: ${parsedCommand.command}. Run harness --help for available commands.`);
       }
 
       // Check workspace initialization if required
@@ -218,6 +259,7 @@ export async function main(
         command: parsedCommand.command,
         io,
         registry,
+        args: commandArgs,
       };
 
       response = await handler.run(context);

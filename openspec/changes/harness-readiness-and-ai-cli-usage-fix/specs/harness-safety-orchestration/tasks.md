@@ -48,7 +48,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试验证 Hook/agent 模板标注
 - **输出**: `test/safety-template-markers.test.ts`
@@ -68,7 +68,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 配置
 - **依赖**: TASK-SAF-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 Hook 生成逻辑中增加模板标注注释
 - **输入**: `src/capabilities/safety/command.ts` + Hook 模板脚本
@@ -91,7 +91,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 配置
 - **依赖**: TASK-SAF-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 19 个 agent 定义文件生成时增加模板状态标记
 - **输入**: `src/capabilities/safety/command.ts`
@@ -113,7 +113,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 接口层
 - **依赖**: TASK-SAF-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 新事件只写入 `.harness/events/`，旧路径只读兼容
 - **输入**: `src/capabilities/safety/command.ts`
@@ -135,7 +135,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 接口层
 - **依赖**: TASK-SAF-02, TASK-SAF-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: status 命令展示 safety 各功能完成状态，doctor 标注 Hook 模板性质
 - **输入**: `src/commands/status.ts`, `src/commands/doctor.ts`
@@ -158,7 +158,7 @@ TypeScript 5.5+ / Bash / Markdown
 
 - **类型**: 测试-验证
 - **依赖**: TASK-SAF-04, TASK-SAF-05
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **验收标准**:
   - [ ] `test/safety-template-markers.test.ts` 4/4 通过

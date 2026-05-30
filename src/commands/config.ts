@@ -58,7 +58,7 @@ export async function runConfigCommand(context: CommandContext): Promise<CliResp
   const paths = resolveWorkspacePaths(cwd);
   
   // Parse command args
-  const args = (context as any).args || [];
+  const args = context.args || [];
   const configArgs = parseConfigArgs(args);
 
   // Handle --repair-adapters

@@ -64,7 +64,7 @@
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写脚本验证 `npm run typecheck`、`npm run lint`、`npm run build`、`npm test` 均返回 0
 - **输入**: package.json scripts
@@ -88,7 +88,7 @@
 
 - **类型**: 配置
 - **依赖**: TASK-QG-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 创建 `eslint.config.js`（ESLint 9 flat config 格式）
 - **输入**: design.md §4.2 ESLint 配置
@@ -112,7 +112,7 @@
 
 - **类型**: 数据层
 - **依赖**: TASK-QG-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 确保 `Transaction` 类型从 `src/core/transaction.ts` 正确导出
 - **输入**: `src/core/transaction.ts`
@@ -133,7 +133,7 @@
 
 - **类型**: 数据层
 - **依赖**: TASK-QG-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 统一 `ReviewFinding.severity` 类型定义与实际使用
 - **输入**: `src/capabilities/review/types.ts` + `command.ts`
@@ -156,7 +156,7 @@
 
 - **类型**: 接口层
 - **依赖**: TASK-QG-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 确保 `buildConfigFromAnswers()` 返回类型与 `HarnessConfig` 完全匹配
 - **输入**: `src/cli/main.ts`
@@ -177,7 +177,7 @@
 
 - **类型**: 测试-验证
 - **依赖**: TASK-QG-02, TASK-QG-04, TASK-QG-05
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 运行 TASK-QG-01 测试，确保全部门禁通过
 - **输入**: 所有修复后的文件

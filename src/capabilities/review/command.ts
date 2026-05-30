@@ -320,7 +320,7 @@ function getCurrentBranch(cwd: string): string {
 export async function runReviewCommand(context: CommandContext): Promise<CliResponse> {
   const { cwd, dryRun } = context.globalOptions;
   const paths = resolveWorkspacePaths(cwd);
-  const args = (context as any).args || [];
+  const args = context.args || [];
 
   // 解析参数
   let options;
@@ -350,6 +350,16 @@ export async function runReviewCommand(context: CommandContext): Promise<CliResp
 
   const { files, scopeName } = scopeResult;
 
+  // --comment 未实现
+  if ((options as any).comment) {
+    return {
+      code: 2606,
+      msg: '远程评论功能后续版本支持',
+      data: { command: 'review' },
+      warnings: [],
+    };
+  }
+
   // 选择 reviewer
   const reviewers = selectReviewers(options, files.length);
 
@@ -364,7 +374,17 @@ export async function runReviewCommand(context: CommandContext): Promise<CliResp
   const deduplicated = deduplicateFindings(filtered);
 
   // 分类严重度
-  const classified = classifySeverity(deduplicated);
+  const classified = classifySeverity(deduplicated).map(f => ({
+    ...f,
+    source: 'heuristic' as const,
+  }));
+
+  // M1 受限功能警告
+  const m1Warnings: string[] = [];
+  if (reviewers.length > 3 || reviewers.includes('deep-bug-analyzer')) {
+    m1Warnings.push('本地启发式扫描模式，多 agent 并行审查后续版本支持');
+    m1Warnings.push('validator 独立复核后续版本支持');
+  }
 
   // 统计
   const summary = {
@@ -427,6 +447,7 @@ ${f.suggestion ? `> 建议: ${f.suggestion}` : ''}
       msg: `发现 ${summary.p0} 个 P0 阻断问题`,
       data: {
         command: 'review',
+        reviewMode: 'heuristic',
         scope: scopeName,
         findings: classified,
         summary,
@@ -435,7 +456,7 @@ ${f.suggestion ? `> 建议: ${f.suggestion}` : ''}
           json: jsonReportPath,
         },
       },
-      warnings: dryRun ? ['Dry-run 模式：未写入报告'] : [],
+      warnings: [...m1Warnings, ...(dryRun ? ['Dry-run 模式：未写入报告'] : [])],
     };
   }
 
@@ -444,6 +465,7 @@ ${f.suggestion ? `> 建议: ${f.suggestion}` : ''}
     msg: 'success',
     data: {
       command: 'review',
+      reviewMode: 'heuristic',
       scope: scopeName,
       findings: classified,
       summary,
@@ -452,6 +474,6 @@ ${f.suggestion ? `> 建议: ${f.suggestion}` : ''}
         json: jsonReportPath,
       },
     },
-    warnings: dryRun ? ['Dry-run 模式：未写入报告'] : [],
+    warnings: [...m1Warnings, ...(dryRun ? ['Dry-run 模式：未写入报告'] : [])],
   };
 }

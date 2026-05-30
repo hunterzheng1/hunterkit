@@ -46,7 +46,7 @@ TypeScript 5.5+
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试验证每个阶段返回正确的 data.status 和 code
 - **输出**: `test/develop-stage-status.test.ts`
@@ -66,7 +66,7 @@ TypeScript 5.5+
 
 - **类型**: 接口层
 - **依赖**: TASK-DEV-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 替换 6 个未实现阶段的 `TODO + warning` 为 `notImplementedStage()` 调用
 - **输入**: `src/capabilities/develop/command.ts`, `types.ts`
@@ -92,7 +92,7 @@ TypeScript 5.5+
 
 - **类型**: 接口层
 - **依赖**: TASK-DEV-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 status 输出中增加 develop 各阶段状态
 - **输入**: `src/commands/status.ts`
@@ -113,7 +113,7 @@ TypeScript 5.5+
 
 - **类型**: 测试-验证
 - **依赖**: TASK-DEV-02, TASK-DEV-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **验收标准**:
   - [ ] `test/develop-stage-status.test.ts` 8/8 通过

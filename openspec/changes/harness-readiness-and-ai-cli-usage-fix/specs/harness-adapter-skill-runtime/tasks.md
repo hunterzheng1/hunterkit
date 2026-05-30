@@ -47,7 +47,7 @@ TypeScript 5.5+ / Markdown
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试验证 sanitizeInternalNames 过滤正确
 - **输出**: `test/name-sanitizer.test.ts`
@@ -68,7 +68,7 @@ TypeScript 5.5+ / Markdown
 
 - **类型**: 接口层
 - **依赖**: TASK-SKL-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 `src/adapters/projection-renderer.ts` 新增名称过滤函数
 - **输出**: `sanitizeInternalNames()` 函数
@@ -90,7 +90,7 @@ TypeScript 5.5+ / Markdown
 
 - **类型**: 配置
 - **依赖**: TASK-SKL-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 审计 6 个模板文件，替换内部来源名
 - **输入**: `.harness/adapters/shared/skills/harness/references/*.md`（4 文件）
@@ -112,7 +112,7 @@ TypeScript 5.5+ / Markdown
 
 - **类型**: 接口层
 - **依赖**: TASK-SKL-02
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 `renderFrontmatter()` 和投影写入流程中调用过滤函数
 - **输入**: `src/adapters/projection-renderer.ts`, `src/adapters/projection-writer.ts`
@@ -132,7 +132,7 @@ TypeScript 5.5+ / Markdown
 
 - **类型**: 测试-验证
 - **依赖**: TASK-SKL-04
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **验收标准**:
   - [ ] `test/name-sanitizer.test.ts` 5/5 通过

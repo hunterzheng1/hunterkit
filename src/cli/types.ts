@@ -93,4 +93,6 @@ export interface CommandContext {
   io: CliIo;
   /** Command registry reference */
   registry: CommandRegistry;
+  /** Command-level arguments passed through from CLI */
+  args: string[];
 }

@@ -46,7 +46,7 @@ TypeScript 5.5+ / commander 12.1
 
 - **类型**: 测试-骨架
 - **依赖**: 无
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 编写测试覆盖 dist help 输出和 --help --json 行为
 - **输出**: `test/cli-entrypoint-extra.test.ts`
@@ -65,7 +65,7 @@ TypeScript 5.5+ / commander 12.1
 
 - **类型**: 接口层
 - **依赖**: TASK-CLE-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在 `main()` 中实现 `--help --json` 输出命令列表 JSON
 - **输入**: `src/cli/main.ts`
@@ -88,7 +88,7 @@ TypeScript 5.5+ / commander 12.1
 
 - **类型**: 接口层
 - **依赖**: TASK-CLE-01
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 - **任务描述**: 在交互式入口增加 AI CLI 类型检测和提示
 - **输入**: `src/cli/interactive.ts`
@@ -111,7 +111,7 @@ TypeScript 5.5+ / commander 12.1
 
 - **类型**: 测试-验证
 - **依赖**: TASK-CLE-02, TASK-CLE-03
-- **状态**: [ ] 未完成
+- **状态**: [x] 已完成
 
 **验收标准**:
 - [ ] `test/cli-entrypoint-extra.test.ts` 全部通过

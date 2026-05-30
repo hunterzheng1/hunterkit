@@ -9,6 +9,15 @@ import { select, checkbox } from '@inquirer/prompts';
 import type { CommandContext, CliResponse } from './types.js';
 import { HarnessCliError } from './errors.js';
 
+/**
+ * 检测 AI 工具类型（通过环境变量）
+ */
+export function detectAiTool(): string | null {
+  if (process.env.CLAUDE_CODE_SESSION_ID) return 'Claude Code';
+  if (process.env.CODEX_SESSION_ID) return 'Codex';
+  return null;
+}
+
 /** 向导答案数据结构 */
 export interface WizardAnswers {
   projectPath: string;
