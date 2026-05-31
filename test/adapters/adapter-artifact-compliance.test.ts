@@ -59,7 +59,7 @@ describe('Install artifact compliance - Claude full', () => {
   it('Claude runtime SKILL.md has managed marker and repair command', () => {
     const entries = createAdapterRegistry();
     const claudeEntry = entries.find(
-      e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'),
+      e => e.tool === 'claude' && e.sourceKind === 'skill',
     );
     expect(claudeEntry).toBeDefined();
     const rendered = renderProjection(claudeEntry!, 'test content');
@@ -189,9 +189,12 @@ describe('Drift detection and repair', () => {
 
   it('drift detector reports conflict for unmanaged projections', () => {
     const entry = createAdapterRegistry()[0];
-    mkdirSync(join(tempDir, '.harness/adapters/claude/skills/harness'), { recursive: true });
+    // 使用 entry.sourcePath 动态创建目录
+    const sourceDir = join(tempDir, entry.sourcePath, '..');
+    mkdirSync(sourceDir, { recursive: true });
     writeFileSync(join(tempDir, entry.sourcePath), 'source content');
-    mkdirSync(join(tempDir, '.claude/skills/harness'), { recursive: true });
+    const projDir = join(tempDir, entry.projectionPath, '..');
+    mkdirSync(projDir, { recursive: true });
     writeFileSync(join(tempDir, entry.projectionPath), 'user custom unmanaged content');
     const status = checkAdapterDrift(tempDir, entry);
     expect(status.status).toBe('conflict');

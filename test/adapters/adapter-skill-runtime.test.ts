@@ -27,7 +27,8 @@ function cleanupTempProject(dir: string): void {
 describe('createAdapterRegistry', () => {
   it('should return entries for all platforms', () => {
     const entries = createAdapterRegistry();
-    expect(entries.length).toBeGreaterThanOrEqual(4);
+    // Claude: 8 skills + 8 commands = 16, Codex: 8 skills + 1 metadata = 9, Copilot: 1, Cursor: 8 = 34
+    expect(entries.length).toBeGreaterThanOrEqual(30);
     const tools = new Set(entries.map(e => e.tool));
     expect(tools.has('claude')).toBe(true);
     expect(tools.has('codex')).toBe(true);
@@ -35,10 +36,41 @@ describe('createAdapterRegistry', () => {
     expect(tools.has('cursor')).toBe(true);
   });
 
+  it('should generate 8 individual skill entries for Claude', () => {
+    const entries = createAdapterRegistry();
+    const claudeSkills = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'skill',
+    );
+    expect(claudeSkills.length).toBe(8);
+    const names = claudeSkills.map(e => e.skillName).sort();
+    expect(names).toEqual([
+      'harness-config',
+      'harness-develop',
+      'harness-doctor',
+      'harness-inspect',
+      'harness-knowledge',
+      'harness-review',
+      'harness-status',
+      'harness-sync',
+    ]);
+  });
+
+  it('should generate 8 slash command entries for Claude', () => {
+    const entries = createAdapterRegistry();
+    const claudeCommands = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    );
+    expect(claudeCommands.length).toBe(8);
+    // 验证每个 command 的 projectionPath 正确
+    expect(claudeCommands.some(c => c.projectionPath === '.claude/commands/harness/status.md')).toBe(true);
+    expect(claudeCommands.some(c => c.projectionPath === '.claude/commands/harness/review.md')).toBe(true);
+  });
+
   it('should filter by tool', () => {
     const entries = createAdapterRegistry();
     const claudeOnly = filterByTool(entries, ['claude']);
     expect(claudeOnly.every(e => e.tool === 'claude')).toBe(true);
+    expect(claudeOnly.length).toBe(16); // 8 skills + 8 commands
   });
 });
 
@@ -156,25 +188,92 @@ describe('renderProjection', () => {
   });
 
   // TASK-AR-01: frontmatter 生成测试
-  it('should include Claude frontmatter for claude tool', () => {
+  it('should include Claude per-skill frontmatter', () => {
     const entries = createAdapterRegistry();
-    const claudeEntry = entries.find(e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'));
+    const claudeEntry = entries.find(e => e.tool === 'claude' && e.sourceKind === 'skill');
     expect(claudeEntry).toBeDefined();
     const rendered = renderProjection(claudeEntry!, 'test content');
     expect(rendered).toContain('---');
-    expect(rendered).toContain('name: harness');
+    expect(rendered).toContain('name: harness-');
     expect(rendered).toContain('description:');
-    expect(rendered).toContain('when_to_use:');
+    expect(rendered).toContain('disable-model-invocation:');
     expect(rendered).toContain('allowed-tools:');
+  });
+
+  it('should include Claude slash command frontmatter', () => {
+    const entries = createAdapterRegistry();
+    const cmdEntry = entries.find(e => e.tool === 'claude' && e.sourceKind === 'slash-command');
+    expect(cmdEntry).toBeDefined();
+    const rendered = renderProjection(cmdEntry!, 'test content');
+    expect(rendered).toContain('---');
+    expect(rendered).toContain('skill: harness-');
+    expect(rendered).toContain('name:');
+    expect(rendered).toContain('description:');
+  });
+
+  it('should set disable-model-invocation: true for high-risk skills', () => {
+    const entries = createAdapterRegistry();
+    const highRisk = ['harness-sync', 'harness-config', 'harness-develop', 'harness-inspect'];
+    for (const name of highRisk) {
+      const entry = entries.find(e => e.skillName === name);
+      expect(entry).toBeDefined();
+      const rendered = renderProjection(entry!, 'test');
+      expect(rendered).toContain('disable-model-invocation: true');
+    }
+  });
+
+  it('should set disable-model-invocation: false for low-risk skills', () => {
+    const entries = createAdapterRegistry();
+    const lowRisk = ['harness-status', 'harness-doctor', 'harness-review', 'harness-knowledge'];
+    for (const name of lowRisk) {
+      const entry = entries.find(e => e.skillName === name);
+      expect(entry).toBeDefined();
+      const rendered = renderProjection(entry!, 'test');
+      expect(rendered).toContain('disable-model-invocation: false');
+    }
+  });
+
+  it('should set model: haiku for lightweight skills', () => {
+    const entries = createAdapterRegistry();
+    const haikuSkills = ['harness-status', 'harness-doctor'];
+    for (const name of haikuSkills) {
+      const entry = entries.find(e => e.skillName === name);
+      expect(entry).toBeDefined();
+      const rendered = renderProjection(entry!, 'test');
+      expect(rendered).toContain('model: haiku');
+    }
+  });
+
+  it('should set model: sonnet for reasoning-heavy skills', () => {
+    const entries = createAdapterRegistry();
+    const sonnetSkills = ['harness-review', 'harness-inspect'];
+    for (const name of sonnetSkills) {
+      const entry = entries.find(e => e.skillName === name);
+      expect(entry).toBeDefined();
+      const rendered = renderProjection(entry!, 'test');
+      expect(rendered).toContain('model: sonnet');
+    }
+  });
+
+  it('should set context: fork and agent: for review/inspect', () => {
+    const entries = createAdapterRegistry();
+    const forkedSkills = ['harness-review', 'harness-inspect'];
+    for (const name of forkedSkills) {
+      const entry = entries.find(e => e.skillName === name);
+      expect(entry).toBeDefined();
+      const rendered = renderProjection(entry!, 'test');
+      expect(rendered).toContain('context: fork');
+      expect(rendered).toContain('agent:');
+    }
   });
 
   it('should include Codex frontmatter for codex tool', () => {
     const entries = createAdapterRegistry();
-    const codexEntry = entries.find(e => e.tool === 'codex' && e.sourcePath.includes('SKILL.md'));
+    const codexEntry = entries.find(e => e.tool === 'codex' && e.sourceKind === 'skill');
     expect(codexEntry).toBeDefined();
     const rendered = renderProjection(codexEntry!, 'test content');
     expect(rendered).toContain('---');
-    expect(rendered).toContain('name: harness');
+    expect(rendered).toContain('name: harness-');
     expect(rendered).toContain('description:');
   });
 });
@@ -299,11 +398,25 @@ describe('TASK-ADP-01: Shared skill source compliance', () => {
     const entries = createAdapterRegistry();
     ensureAdapterSources(tempDir, entries);
     // 每个工具适配器都应生成 SKILL.md
-    for (const entry of entries) {
-      if (entry.sourcePath.includes('SKILL.md')) {
-        const fullPath = join(tempDir, entry.sourcePath);
-        expect(existsSync(fullPath)).toBe(true);
-      }
+    // Claude: 8 个 skill
+    const claudeSkills = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'skill',
+    );
+    expect(claudeSkills.length).toBe(8);
+    for (const entry of claudeSkills) {
+      expect(existsSync(join(tempDir, entry.sourcePath))).toBe(true);
+    }
+  });
+
+  it('generates slash command files for Claude', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    const claudeCommands = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    );
+    expect(claudeCommands.length).toBe(8);
+    for (const entry of claudeCommands) {
+      expect(existsSync(join(tempDir, entry.sourcePath))).toBe(true);
     }
   });
 
@@ -341,7 +454,7 @@ describe('TASK-ADP-02: Runtime thin projection', () => {
   it('Claude runtime SKILL.md is thin projection', () => {
     const entries = createAdapterRegistry();
     const claudeEntry = entries.find(
-      e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'),
+      e => e.tool === 'claude' && e.sourceKind === 'skill',
     );
     expect(claudeEntry).toBeDefined();
     const rendered = renderProjection(claudeEntry!, 'route: harness inspect');
@@ -353,10 +466,21 @@ describe('TASK-ADP-02: Runtime thin projection', () => {
     expect(rendered).toContain('harness config --repair-adapters');
   });
 
+  it('Claude slash command is thin projection', () => {
+    const entries = createAdapterRegistry();
+    const cmdEntry = entries.find(
+      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    );
+    expect(cmdEntry).toBeDefined();
+    const rendered = renderProjection(cmdEntry!, 'test');
+    expect(rendered.length).toBeLessThan(3000);
+    expect(rendered).toContain(MANAGED_MARKER);
+  });
+
   it('Codex runtime SKILL.md is thin projection', () => {
     const entries = createAdapterRegistry();
     const codexEntry = entries.find(
-      e => e.tool === 'codex' && e.sourcePath.includes('SKILL.md'),
+      e => e.tool === 'codex' && e.sourceKind === 'skill',
     );
     expect(codexEntry).toBeDefined();
     const rendered = renderProjection(codexEntry!, 'route: harness inspect');

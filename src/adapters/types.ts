@@ -62,8 +62,10 @@ export interface AdapterRegistryEntry {
   templateContent: string;
   /** artifact kind: source/runtime/config/report */
   kind?: 'source' | 'runtime' | 'config' | 'report';
-  /** source tree type: skill/metadata/agent */
-  sourceKind?: 'skill' | 'metadata' | 'agent';
+  /** source tree type: skill/metadata/agent/slash-command */
+  sourceKind?: 'skill' | 'metadata' | 'agent' | 'slash-command';
+  /** skill name (e.g., harness-status) for per-skill frontmatter */
+  skillName?: string;
   /** required companion files for source tree */
   requiredFiles?: string[];
   /** managed metadata */
