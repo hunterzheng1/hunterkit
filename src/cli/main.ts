@@ -25,6 +25,7 @@ import type { AdapterTool } from '../adapters/types.js';
 import { ensureAdapterSources } from '../adapters/source-manager.js';
 import { applyProjectionWrites } from '../adapters/projection-writer.js';
 import { beginTransaction, commitTransaction } from '../core/transaction.js';
+import { generateHooks, generateHookConfigs, generateSubagentDefs } from '../capabilities/safety/command.js';
 import { writeFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
@@ -161,6 +162,20 @@ function executePostWizardIntegration(
     for (const status of projectionStatuses) {
       if (status.status === 'synced') {
         artifacts.push(status.projectionPath);
+      }
+    }
+
+    // 4. 生成 Hook 脚本和 Subagent 定义
+    if (answers.hookStrength !== 'none') {
+      try {
+        generateHooks(cwd);
+        generateHookConfigs(cwd);
+        generateSubagentDefs(cwd);
+        artifacts.push('.harness/adapters/claude/hooks/ (hook scripts)');
+        artifacts.push('.harness/adapters/codex/hooks/ (hook scripts)');
+        artifacts.push('.harness/adapters/claude/agents/ (19 subagent defs)');
+      } catch (hookError) {
+        warnings.push(`Hook/subagent generation failed: ${hookError instanceof Error ? hookError.message : String(hookError)}`);
       }
     }
   } catch (error) {
