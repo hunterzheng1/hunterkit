@@ -5,7 +5,7 @@
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { select, checkbox } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import type { CommandContext, CliResponse, AiCliContext } from './types.js';
 import { detectAiCliContext } from './ai-context.js';
 
@@ -77,36 +77,58 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
       ? await select({ message: '请输入项目路径', choices: [{ name: context.globalOptions.cwd, value: context.globalOptions.cwd }] })
       : projectPath;
 
-    // 步骤 2：选择 AI 工具（空选时循环重试，必须至少选一个）
-    let aiTools: string[] = [];
-    while (aiTools.length === 0) {
-      aiTools = await checkbox({
-        message: '选择 AI 工具（空格选中，Enter 确认，至少选择一个）',
-        choices: [
-          { name: 'Claude Code', value: 'claude' },
-          { name: 'Codex (OpenAI)', value: 'codex' },
-        ],
-      }) as string[];
+    // 步骤 2：选择 AI 工具（使用 select 避免 Windows 终端 checkbox 空格键不响应）
+    const aiToolChoice = await select({
+      message: '选择 AI 工具',
+      choices: [
+        { name: 'Claude Code', value: 'claude' },
+        { name: 'Codex (OpenAI)', value: 'codex' },
+        { name: 'Claude Code + Codex（全部）', value: 'both' },
+      ],
+    }) as string;
 
-      if (aiTools.length === 0) {
-        // 空选提示，但不退出向导，循环重试
-        if (!context.globalOptions.json) {
-          context.io.stdout.write('\x1b[33m⚠ 请至少选择一个 AI 工具（空格选中，Enter 确认）\x1b[0m\n');
-        }
-      }
-    }
+    const aiTools: string[] = aiToolChoice === 'both'
+      ? ['claude', 'codex']
+      : [aiToolChoice];
 
-    // 步骤 3：选择工作流能力
-    const capabilities = await checkbox({
+    // 步骤 3：选择工作流能力（使用 select 避免 checkbox 兼容性问题）
+    const capabilityChoice = await select({
       message: '选择工作流能力',
       choices: [
+        { name: '全部能力（推荐）', value: 'all' },
+        { name: '自定义选择', value: 'custom' },
+        { name: '跳过（仅安装基础框架）', value: 'none' },
+      ],
+    }) as string;
+
+    let capabilities: string[];
+    if (capabilityChoice === 'all') {
+      capabilities = ['inspect', 'sync', 'develop', 'review', 'knowledge'];
+    } else if (capabilityChoice === 'custom') {
+      // 自定义：逐个能力选择
+      capabilities = [];
+      const capList = [
         { name: '项目检查 (inspect)', value: 'inspect' },
         { name: '文档同步 (sync)', value: 'sync' },
         { name: '开发辅助 (develop)', value: 'develop' },
         { name: '代码审查 (review)', value: 'review' },
         { name: '知识库 (knowledge)', value: 'knowledge' },
-      ],
-    });
+      ];
+      for (const cap of capList) {
+        const answer = await select({
+          message: `启用 "${cap.name}"？`,
+          choices: [
+            { name: '是', value: 'yes' },
+            { name: '否', value: 'no' },
+          ],
+        }) as string;
+        if (answer === 'yes') {
+          capabilities.push(cap.value);
+        }
+      }
+    } else {
+      capabilities = [];
+    }
 
     // 步骤 4：选择项目类型
     const projectType = await select({

@@ -1,6 +1,6 @@
 {
   "name": "@hunterzheng/harness",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Personal development tool harness - unified CLI entrypoint",
   "type": "module",
   "bin": {

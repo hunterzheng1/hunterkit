@@ -77,10 +77,10 @@ describe('runInitWizard', () => {
   it('should complete 6-step wizard and return wizardAnswers', async () => {
     // Step 1: project path (select)
     mockSelect.mockResolvedValueOnce(process.cwd());
-    // Step 2: AI tools (checkbox)
-    mockCheckbox.mockResolvedValueOnce(['claude', 'codex']);
-    // Step 3: capabilities (checkbox)
-    mockCheckbox.mockResolvedValueOnce(['inspect', 'sync', 'develop', 'review', 'knowledge']);
+    // Step 2: AI tools (select: both → ['claude', 'codex'])
+    mockSelect.mockResolvedValueOnce('both');
+    // Step 3: capabilities (select: all)
+    mockSelect.mockResolvedValueOnce('all');
     // Step 4: project type (select)
     mockSelect.mockResolvedValueOnce('node');
     // Step 5: write strategy (select)
@@ -104,8 +104,9 @@ describe('runInitWizard', () => {
 
   it('should handle step 2 with only Claude selected', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce(['claude']);
-    mockCheckbox.mockResolvedValueOnce(['inspect']);
+    // 选单个 Claude
+    mockSelect.mockResolvedValueOnce('claude');
+    mockSelect.mockResolvedValueOnce('all');     // capabilities: all
     mockSelect.mockResolvedValueOnce('node');
     mockSelect.mockResolvedValueOnce('write');
     mockSelect.mockResolvedValueOnce('full');
@@ -116,31 +117,25 @@ describe('runInitWizard', () => {
     expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
   });
 
-  it('should loop until at least one AI tool is selected', async () => {
+  it('should handle step 2 with both Claude and Codex selected', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    // 第一次空选 → 循环重试
-    mockCheckbox.mockResolvedValueOnce([]);
-    // 第二次选择 Claude → 继续向导
-    mockCheckbox.mockResolvedValueOnce(['claude']);
-    mockCheckbox.mockResolvedValueOnce([]);    // capabilities
-    mockSelect.mockResolvedValueOnce('auto');  // projectType
-    mockSelect.mockResolvedValueOnce('write'); // writeStrategy
-    mockSelect.mockResolvedValueOnce('full');  // hookStrength
+    // 选 both → ['claude', 'codex']
+    mockSelect.mockResolvedValueOnce('both');
+    mockSelect.mockResolvedValueOnce('all');
+    mockSelect.mockResolvedValueOnce('node');
+    mockSelect.mockResolvedValueOnce('write');
+    mockSelect.mockResolvedValueOnce('full');
 
     const context = createMockContext();
     const response = await runInitWizard(context);
 
-    // 循环后成功完成向导
-    expect(response.code).toBe(0);
-    expect(response.msg).toBe('success');
-    const answers = response.data.wizardAnswers;
-    expect(answers.aiTools).toEqual(['claude']);
+    expect(response.data.wizardAnswers.aiTools).toEqual(['claude', 'codex']);
   });
 
-  it('should handle step 3 with "all" capabilities', async () => {
+  it('should handle "all" capabilities', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce(['claude']);
-    mockCheckbox.mockResolvedValueOnce(['inspect', 'sync', 'develop', 'review', 'knowledge']);
+    mockSelect.mockResolvedValueOnce('claude');   // aiTools
+    mockSelect.mockResolvedValueOnce('all');      // capabilities: all
     mockSelect.mockResolvedValueOnce('node');
     mockSelect.mockResolvedValueOnce('write');
     mockSelect.mockResolvedValueOnce('full');
@@ -150,12 +145,47 @@ describe('runInitWizard', () => {
 
     expect(response.data.wizardAnswers.capabilities).toContain('inspect');
     expect(response.data.wizardAnswers.capabilities).toContain('knowledge');
+    expect(response.data.wizardAnswers.capabilities.length).toBe(5);
+  });
+
+  it('should handle "custom" capabilities with individual selection', async () => {
+    mockSelect.mockResolvedValueOnce(process.cwd());
+    mockSelect.mockResolvedValueOnce('claude');   // aiTools
+    mockSelect.mockResolvedValueOnce('custom');   // capabilities: custom
+    // 5 个能力逐个确认：选 inspect, sync, review
+    mockSelect.mockResolvedValueOnce('yes');      // inspect
+    mockSelect.mockResolvedValueOnce('yes');      // sync
+    mockSelect.mockResolvedValueOnce('no');       // develop
+    mockSelect.mockResolvedValueOnce('yes');      // review
+    mockSelect.mockResolvedValueOnce('no');       // knowledge
+    mockSelect.mockResolvedValueOnce('node');
+    mockSelect.mockResolvedValueOnce('write');
+    mockSelect.mockResolvedValueOnce('full');
+
+    const context = createMockContext();
+    const response = await runInitWizard(context);
+
+    expect(response.data.wizardAnswers.capabilities).toEqual(['inspect', 'sync', 'review']);
+  });
+
+  it('should handle "none" capabilities (empty)', async () => {
+    mockSelect.mockResolvedValueOnce(process.cwd());
+    mockSelect.mockResolvedValueOnce('claude');   // aiTools
+    mockSelect.mockResolvedValueOnce('none');     // capabilities: none
+    mockSelect.mockResolvedValueOnce('node');
+    mockSelect.mockResolvedValueOnce('write');
+    mockSelect.mockResolvedValueOnce('full');
+
+    const context = createMockContext();
+    const response = await runInitWizard(context);
+
+    expect(response.data.wizardAnswers.capabilities).toEqual([]);
   });
 
   it('should handle step 5 "preview" as dry-run', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce(['claude']);
-    mockCheckbox.mockResolvedValueOnce(['inspect']);
+    mockSelect.mockResolvedValueOnce('claude');   // aiTools
+    mockSelect.mockResolvedValueOnce('all');      // capabilities
     mockSelect.mockResolvedValueOnce('node');
     mockSelect.mockResolvedValueOnce('preview');
     mockSelect.mockResolvedValueOnce('none');
@@ -187,10 +217,10 @@ describe('runInitWizard', () => {
     expect(response.code).toBe(1003);
   });
 
-  it('should call select 4 times and checkbox 2 times', async () => {
+  it('should call select for all wizard steps (no checkbox)', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce(['claude']);
-    mockCheckbox.mockResolvedValueOnce(['inspect']);
+    mockSelect.mockResolvedValueOnce('claude');   // aiTools
+    mockSelect.mockResolvedValueOnce('all');      // capabilities
     mockSelect.mockResolvedValueOnce('node');
     mockSelect.mockResolvedValueOnce('write');
     mockSelect.mockResolvedValueOnce('full');
@@ -198,8 +228,8 @@ describe('runInitWizard', () => {
     const context = createMockContext();
     await runInitWizard(context);
 
-    expect(mockSelect).toHaveBeenCalledTimes(4);
-    expect(mockCheckbox).toHaveBeenCalledTimes(2);
+    // 6 次 select 调用（步骤1-6）
+    expect(mockSelect).toHaveBeenCalledTimes(6);
   });
 });
 
