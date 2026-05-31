@@ -26,8 +26,10 @@ import { ensureAdapterSources } from '../adapters/source-manager.js';
 import { applyProjectionWrites } from '../adapters/projection-writer.js';
 import { beginTransaction, commitTransaction } from '../core/transaction.js';
 import { generateHooks, generateHookConfigs, generateSubagentDefs } from '../capabilities/safety/command.js';
-import { writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
+import { upsertManagedBlock } from '../capabilities/sync/managed-block.js';
+import { renderAgentsManagedBlock, renderClaudeShortEntry } from '../capabilities/sync/document-templates.js';
 
 /**
  * Register all real command handlers, replacing stubs
@@ -131,21 +133,30 @@ function executePostWizardIntegration(
     );
     artifacts.push(...workspaceResult.created);
 
-    // 2. 生成 AGENTS.md 和 CLAUDE.md
+    // 2. 生成 AGENTS.md 和 CLAUDE.md（使用 managed block 服务）
     const agentsPath = join(cwd, 'AGENTS.md');
-    if (!existsSync(agentsPath)) {
-      const agentsContent = `# AGENTS.md\n\nProject: ${config.project.name}\nType: ${config.project.type}\n`;
-      writeFileSync(agentsPath, agentsContent, 'utf-8');
-      artifacts.push('AGENTS.md');
+    const existingAgents = existsSync(agentsPath) ? readFileSync(agentsPath, 'utf-8') : '';
+    const agentsResult = upsertManagedBlock(
+      existingAgents,
+      renderAgentsManagedBlock(),
+      'AGENTS.md',
+    );
+    writeFileSync(agentsPath, agentsResult.content, 'utf-8');
+    artifacts.push('AGENTS.md');
+    if (agentsResult.migrated) {
+      warnings.push('AGENTS.md: 旧 DocSync block 已迁移为 Harness managed block');
     }
 
     if (config.aiTools.claude) {
       const claudePath = join(cwd, 'CLAUDE.md');
-      if (!existsSync(claudePath)) {
-        const claudeContent = `# CLAUDE.md\n\nProject: ${config.project.name}\n`;
-        writeFileSync(claudePath, claudeContent, 'utf-8');
-        artifacts.push('CLAUDE.md');
-      }
+      const existingClaude = existsSync(claudePath) ? readFileSync(claudePath, 'utf-8') : '';
+      const claudeResult = upsertManagedBlock(
+        existingClaude,
+        renderClaudeShortEntry(),
+        'CLAUDE.md',
+      );
+      writeFileSync(claudePath, claudeResult.content, 'utf-8');
+      artifacts.push('CLAUDE.md');
     }
 
     // 3. 生成 Skill 投影

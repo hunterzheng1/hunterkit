@@ -9,6 +9,9 @@ import type { CommandContext, CliResponse } from '../../cli/types.js';
 import { resolveWorkspacePaths } from '../../core/paths.js';
 import { beginTransaction, stageWrite, commitTransaction } from '../../core/transaction.js';
 import type { SyncDocumentResult, DocumentKind } from './types.js';
+import { MANAGED_BLOCK_START, MANAGED_BLOCK_END, upsertManagedBlock } from './managed-block.js';
+import { renderAgentsManagedBlock, renderClaudeShortEntry, renderReadmeUsageBlock } from './document-templates.js';
+import { scanForInternalNames } from './internal-source-guard.js';
 
 const DOCUMENT_TARGETS: Record<DocumentKind, { path: string; label: string }> = {
   readme: { path: 'README.md', label: 'README' },
@@ -19,8 +22,7 @@ const DOCUMENT_TARGETS: Record<DocumentKind, { path: string; label: string }> = 
 
 const VALID_DOC_KINDS: string[] = ['readme', 'agents', 'claude', 'copilot'];
 
-const MANAGED_BLOCK_START = '<!-- harness-managed:start -->';
-const MANAGED_BLOCK_END = '<!-- harness-managed:end -->';
+// MANAGED_BLOCK_START/END now imported from ./managed-block.js (canonical: <!-- harness:start -->)
 
 /** 高风险变更模式 */
 const HIGH_RISK_PATTERNS = [

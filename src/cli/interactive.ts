@@ -6,11 +6,12 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { select, checkbox } from '@inquirer/prompts';
-import type { CommandContext, CliResponse } from './types.js';
-import { HarnessCliError } from './errors.js';
+import type { CommandContext, CliResponse, AiCliContext } from './types.js';
+import { detectAiCliContext } from './ai-context.js';
 
 /**
  * 检测 AI 工具类型（通过环境变量）
+ * @deprecated 使用 detectAiCliContext(env) 替代，便于测试注入
  */
 export function detectAiTool(): string | null {
   if (process.env.CLAUDE_CODE_SESSION_ID) return 'Claude Code';
@@ -58,6 +59,11 @@ export async function runInteractiveEntrypoint(context: CommandContext): Promise
  */
 export async function runInitWizard(context: CommandContext): Promise<CliResponse> {
   try {
+    // 检测 AI CLI 上下文（通过注入 env）
+    const aiCliContext = detectAiCliContext(
+      (context as any)._env ?? process.env,
+    );
+
     // 步骤 1：确认目标项目路径
     const projectPath = await select({
       message: '确认目标项目路径',
@@ -72,7 +78,7 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
       : projectPath;
 
     // 步骤 2：选择 AI 工具
-    let aiTools = await checkbox({
+    const aiTools = await checkbox({
       message: '选择 AI 工具（空格选中，Enter 确认）',
       choices: [
         { name: 'Claude Code', value: 'claude' },
@@ -80,9 +86,19 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
       ],
     }) as string[];
 
-    // 防止空选（用户直接 Enter 跳过）
+    // 空选阻断：返回错误码 1010，不再默认 Claude
     if (aiTools.length === 0) {
-      aiTools = ['claude'];
+      return {
+        code: 1010,
+        msg: 'No AI tool selected',
+        data: {
+          command: 'init',
+          mode: 'wizard',
+          suggestion: '请选择至少一个 AI 工具',
+          aiCliContext,
+        },
+        warnings: [],
+      };
     }
 
     // 步骤 3：选择工作流能力
@@ -147,6 +163,7 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
         mode: 'wizard',
         wizardAnswers,
         dryRun: isDryRun,
+        aiCliContext,
       },
       warnings: isDryRun ? ['Dry-run mode: no files were written'] : [],
     };

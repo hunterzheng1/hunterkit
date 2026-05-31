@@ -8,9 +8,10 @@ import { resolve } from 'node:path';
 import type { CommandContext, CliResponse } from '../cli/types.js';
 import { resolveWorkspacePaths } from '../core/paths.js';
 import { readWorkspaceStatus } from '../core/workspace.js';
-import { validateHarnessConfig } from '../core/config-schema.js';
 import { loadHarnessConfig } from '../core/config.js';
-import { detectLegacySources } from '../core/legacy-sources.js';
+import { aggregateDoctorChecks } from '../core/doctor-checks.js';
+import { createAdapterRegistry } from '../adapters/registry.js';
+import type { ArtifactHealthCheck } from '../core/artifact-health.js';
 
 /**
  * Run the doctor command
@@ -20,65 +21,48 @@ export async function runDoctorCommand(context: CommandContext): Promise<CliResp
   const paths = resolveWorkspacePaths(cwd);
   const status = readWorkspaceStatus(paths);
   const warnings: string[] = [];
-  const checks: Record<string, string> = {};
 
-  // Check 1: workspace initialized
-  if (!status.initialized) {
-    checks.workspace = 'NOT_INITIALIZED';
-    warnings.push('Workspace not initialized. Run "harness" without arguments to initialize.');
-  } else {
-    checks.workspace = 'OK';
-  }
+  let checks: ArtifactHealthCheck[] = [];
 
-  // Check 2: directory integrity
-  const requiredDirs = [paths.config, paths.state, paths.facts, paths.generated, paths.reports];
-  const missingDirs = requiredDirs.filter(d => !existsSync(d));
-  if (missingDirs.length > 0) {
-    checks.directoryIntegrity = `MISSING: ${missingDirs.length} directories`;
-    warnings.push(`Missing directories: ${missingDirs.map(d => d.replace(cwd + '/', '')).join(', ')}`);
-  } else {
-    checks.directoryIntegrity = 'OK';
-  }
+  // Load config to determine selected tools and safety patterns
+  let selectedTools: string[] = [];
+  let safetyPatterns: string[] = [];
+  let hookStrength = 'none';
 
-  // Check 3: config validity
   if (status.initialized) {
     try {
       const config = loadHarnessConfig(paths.config);
-      checks.configValidity = 'OK';
-    } catch (e) {
-      checks.configValidity = `INVALID: ${e instanceof Error ? e.message : String(e)}`;
-      warnings.push('Config file is invalid. Run "harness doctor" for details.');
+      selectedTools = Object.entries(config.aiTools ?? {})
+        .filter(([, v]) => v === true)
+        .map(([k]) => k);
+      safetyPatterns = config.safety?.secretPatterns ?? [];
+      hookStrength = config.safety?.hookStrength ?? 'none';
+    } catch {
+      // Config load failure — will be reported by base checks
     }
-  } else {
-    checks.configValidity = 'N/A';
   }
 
-  // Check 4: legacy sources
-  const legacySources = detectLegacySources(cwd);
-  if (legacySources.length > 0) {
-    checks.legacySources = `FOUND: ${legacySources.map(s => s.name).join(', ')}`;
-    warnings.push(`Legacy sources detected: ${legacySources.map(s => s.name).join(', ')}. Use "harness config --migrate-*" to migrate.`);
-  } else {
-    checks.legacySources = 'NONE';
+  // Use aggregated checks from doctor-checks module
+  const registry = createAdapterRegistry();
+  checks = aggregateDoctorChecks(cwd, selectedTools, hookStrength, registry, safetyPatterns);
+
+  // Collect warnings from ERROR checks
+  for (const check of checks) {
+    if (check.status === 'ERROR') {
+      warnings.push(`[${check.id}] ${check.message}`);
+    }
   }
 
-  // Check 5: Node.js version
-  const nodeVersion = process.version;
-  const major = parseInt(nodeVersion.slice(1).split('.')[0], 10);
-  if (major < 20) {
-    checks.nodeVersion = `UNSUPPORTED: ${nodeVersion}`;
-    warnings.push(`Node.js ${nodeVersion} is below minimum required version 20.0.0`);
-  } else {
-    checks.nodeVersion = `OK: ${nodeVersion}`;
-  }
+  // Determine exit code: non-zero if any ERROR check
+  const hasErrors = checks.some(c => c.status === 'ERROR');
+  const hasWarnings = checks.some(c => c.status === 'WARN');
 
   return {
-    code: 0,
-    msg: 'success',
+    code: hasErrors ? 1 : 0,
+    msg: hasErrors ? 'doctor found issues' : hasWarnings ? 'doctor found warnings' : 'all checks passed',
     data: {
       command: 'doctor',
       checks,
-      legacySources: legacySources.map(s => ({ name: s.name, path: s.path, fileCount: s.fileCount })),
     },
     warnings,
   };

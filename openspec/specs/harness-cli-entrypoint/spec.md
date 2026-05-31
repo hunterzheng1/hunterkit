@@ -1,127 +1,61 @@
-# spec.md - 能力规格定义（增量）
+## ADDED Requirements
 
-> **定位**：`harness-cli-entrypoint` — 入口契约修正，确保 npx/AI 工具 CLI 使用路径、help 输出和命令参数透传一致
-> **增量说明**：本文档为对 `openspec/specs/harness-cli-entrypoint/spec.md` 的增量修改
-> **【质量红线】严禁描述模糊；约束必须量化
-> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+### Requirement: Wizard selection summary is explicit
+系统 MUST 在交互式向导中清晰回显用户选择，避免 AI 工具选择结果为空或安装摘要无法判断。
 
----
+#### Scenario: AI tool selection line
+- **WHEN** 用户完成“选择 AI 工具”步骤
+- **THEN** 向导 MUST 显示已选择的工具名称列表，例如 `Claude Code`、`Codex`；如果没有选择任何工具，必须阻断并提示至少选择一个 AI 工具
 
-## 1. 需求规格（官方格式）
+#### Scenario: Final install summary
+- **WHEN** 初始化成功输出 `[OK] success`
+- **THEN** summary MUST 包含 `Selected AI tools`、`Selected capabilities`、`Hook strength`、`Write strategy`、`Runtime projections written`、`Runtime projections skipped` 六类信息
 
-### 新增需求
+### Requirement: No-argument npx remains the canonical install entry
+系统 MUST 保持 `npx @hunterzheng/harness` 无参数作为唯一推荐安装入口，并让所有细节由向导收集。
 
-#### 需求项：dist 入口 help 输出
+#### Scenario: First run wizard
+- **WHEN** 用户在目标项目第一次执行 `npx @hunterzheng/harness`
+- **THEN** 系统 MUST 进入交互式初始化向导，而不是要求用户传入长参数串
 
-系统必须确保通过 `node dist/bin/harness.js --help` 有完整的命令帮助，而非无输出或空输出。
+#### Scenario: README usage wording
+- **WHEN** README 或 Skill 中描述安装方式
+- **THEN** 文案 MUST 说明“在 AI 工具 CLI 中让工具执行 `npx @hunterzheng/harness`”，不得要求用户手动在普通命令行中完成日常 workflow
 
-##### 场景：dist 入口 help
-- **当** 用户执行 `node dist/bin/harness.js --help`
-- **预期** 系统必须输出包含 8 个命令列表和全局选项说明的帮助信息，不得出现空输出或 "commander output suppressed" 行为
+### Requirement: Install artifacts classify source and runtime
+系统 MUST 在 CLI 安装结果中区分 `.harness/adapters/**` 源文件和 AI 工具 runtime projection。
 
-##### 场景：npx 调用 help
-- **当** 用户执行 `npx @hunterzheng/harness --help`
-- **预期** 系统必须输出与 `node dist/bin/harness.js --help` 相同的帮助信息
+#### Scenario: Artifact type classification
+- **WHEN** 初始化完成列出 artifacts
+- **THEN** 每条 artifact MUST 标注 `source`、`runtime`、`workspace`、`report` 或 `config` 类型；`.harness/adapters/**` 不得被误标为已生效 runtime hook
 
-#### 需求项：交互式入口 AI 工具 CLI 口径
-
-系统必须在交互式入口（未初始化向导和已初始化菜单）中明确体现 AI 工具 CLI 使用口径。
-
-##### 场景：向导首屏提示 AI CLI
-- **当** 用户在 AI 工具 CLI 中触发 npx 进入向导
-- **预期** 向导首屏必须提示 "由 Claude Code / Codex 触发" 或等价说明，让用户知晓当前流程由 AI 工具 CLI 驱动
-
-##### 场景：菜单提示 AI CLI
-- **当** 用户在 AI 工具 CLI 中触发 npx 进入操作菜单
-- **预期** 菜单必须提示当前操作上下文的 AI 工具类型（通过环境变量或检测）
-
-### 修改需求
-
-#### 需求项：命令级 `--json` 格式化输出
-
-系统必须为每个命令提供命令级 `--json` 格式化输出，确保 stdout 为合法 JSON。
-
-**增量修改**：补充关于 `--help` 与 `--json` 同时出现时的行为。原 spec 未定义此冲突情况。
-
-##### 场景：`--help` 与 `--json` 同时出现（新增）
-- **当** 用户执行 `node dist/bin/harness.js --help --json`
-- **预期** 系统必须优先输出 JSON（code 0，data.commands 数组），而非 commander 默认帮助文本，确保 stdout 仍为合法 JSON 可用于脚本解析
-
-### 移除需求
-
-无。
+#### Scenario: Skipped runtime artifacts are visible
+- **WHEN** 某个 AI 工具未选择
+- **THEN** summary MUST 在 skipped artifacts 中说明未生成该工具 runtime projection 的原因是 `tool not selected`
 
 ---
 
-## 2. 技术契约（SDD 扩展）
+## SDD Extension
 
-### 2.1 接口定义
+### Interface Contract
 
-#### 入口补充契约
+| 项目 | 契约 |
+|------|------|
+| CLI path | `npx @hunterzheng/harness` / `harness init` |
+| 输出类型 | 交互式文本；`--json` 时为标准 CLI JSON |
+| 版本依赖 | Node.js `>=20.0.0`，commander `^12.1.0` |
 
-在原 `openspec/specs/harness-cli-entrypoint/spec.md` 技术契约基础上新增：
+### Error Codes
 
-| 补充项 | 要求 |
-|-------|------|
-| dist help | `node dist/bin/harness.js --help` 必须输出完整帮助 |
-| --json + --help | 同时出现时优先 JSON 输出，包含 `commands` 数组 |
-| AI CLI 感知 | 交互式入口需通过环境变量（`CLAUDE_CODE_SESSION_ID` 等）检测 AI CLI 类型 |
-
-#### 新增错误码定义
 | 错误码 | 含义 | 触发条件 |
 |-------|------|----------|
-| 1005 | help 输出失败 | dist 入口 help 渲染异常 |
-
----
-
-## 3. 物理约束
-
-在原 spec 基础上无新增约束。全局选项解析性能仍要求 < 50 毫秒。
-
----
-
-## 4. 影响模块
-
-### 4.1 内部依赖
-- [ ] `src/bin/harness.ts`：入口脚本，确保与 `src/cli/main.ts` 的接口不变
-- [ ] `src/cli/main.ts`：在命令路由前增加 help 请求检测；增加 AI CLI 类型环境变量检测
-- [ ] `src/cli/global-options.ts`：`--help` 和 `--json` 同时出现时改变输出模式
-- [ ] `src/cli/interactive.ts`：向导/菜单增加 AI CLI 上下文提示
-- [ ] `src/cli/output.ts`：增加 JSON 格式的 help 输出路径
-
-### 4.2 外部依赖
-
-| 组件类型 | 组件名称 | 版本 | 用途 | 降级策略 |
-|---------|---------|------|------|---------|
-| 框架 | commander | ^12.1.0 | CLI 解析 | 替换为手动 argv 解析 |
-| 运行时 | Node.js | >= 20.0.0 | 进程执行 | 阻断 |
-
-### 4.3 数据存储
-无新增。
-
----
-
-## 5. 安全与合规
-
-无新增安全约束。
-
----
-
-## 6. 兼容性
-
-### 6.1 接口兼容性
-- 是否向后兼容：是
-- 版本控制策略：新增的 `--help --json` 行为向后兼容；`main()` 签名不变
-
-### 6.2 数据兼容性
-无新增。
-
----
+| 1010 | No AI tool selected | 向导未选择任何 AI 工具 |
+| 1011 | Install summary incomplete | 安装摘要缺少选择或 artifact 分类 |
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（2 个新增 + 1 个修改 = 3 个需求项，5 个场景）
-> - [x] 使用「必须」强制要求
+> - [x] 每个需求项至少有一个场景
+> - [x] 使用「MUST / 必须」强制要求
 > - [x] 所有接口参数已量化
-> - [x] 物理约束已量化
+> - [x] 物理约束已量化：summary 必须列出 6 类信息
 > - [x] 错误码已定义
 > - [x] 技术选型已包含版本信息

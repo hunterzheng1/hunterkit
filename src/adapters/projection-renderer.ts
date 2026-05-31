@@ -4,6 +4,7 @@
  */
 
 import type { AdapterRegistryEntry } from './types.js';
+import { buildManagedMetadata, renderMetadataComment } from './metadata.js';
 
 /** Managed marker injected into projections */
 export const MANAGED_MARKER = '<!-- harness-managed: do not edit manually -->';
@@ -59,21 +60,19 @@ description: Use the local Harness CLI for project inspection, document sync, fe
  */
 export function renderProjection(entry: AdapterRegistryEntry, sourceContent: string): string {
   const lines: string[] = [];
-  
+
   // Add frontmatter based on tool type
   if (entry.tool === 'claude' && entry.sourcePath.includes('SKILL.md')) {
     lines.push(CLAUDE_FRONTMATTER);
   } else if (entry.tool === 'codex' && entry.sourcePath.includes('SKILL.md')) {
     lines.push(CODEX_FRONTMATTER);
   }
-  
-  lines.push(
-    MANAGED_MARKER,
-    `<!-- source: ${entry.sourcePath} -->`,
-    `<!-- repair: harness config --repair-adapters -->`,
-    '',
-    sourceContent,
-  );
+
+  // Use unified metadata
+  const metadata = buildManagedMetadata(sourceContent, entry.sourcePath);
+  lines.push(renderMetadataComment(metadata));
+  lines.push('');
+  lines.push(sourceContent);
   return lines.join('\n');
 }
 

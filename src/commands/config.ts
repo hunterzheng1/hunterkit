@@ -10,8 +10,11 @@ import { beginTransaction, commitTransaction } from '../core/transaction.js';
 import { createAdapterRegistry, filterByTool } from '../adapters/registry.js';
 import { ensureAdapterSources } from '../adapters/source-manager.js';
 import { applyProjectionWrites } from '../adapters/projection-writer.js';
+import { buildArtifactPlan } from '../adapters/artifact-plan.js';
 import type { MigrationOptions } from '../core/types.js';
-import type { AdapterTool } from '../adapters/types.js';
+import type { AdapterTool, ArtifactPlanEntry } from '../adapters/types.js';
+import { loadHarnessConfig } from '../core/config.js';
+import { resolve } from 'node:path';
 
 /**
  * Parse migration and repair flags from command args
@@ -156,11 +159,27 @@ async function handleRepairAdapters(
 ): Promise<CliResponse> {
   // Get adapter registry
   let entries = createAdapterRegistry();
-  
-  // Filter by specified tools if provided
-  if (aiTools.length > 0) {
-    entries = filterByTool(entries, aiTools);
+
+  // Determine selected tools: args override, else read from config
+  let selectedTools = aiTools;
+  if (selectedTools.length === 0) {
+    try {
+      const configPath = resolve(cwd, '.harness', 'config');
+      const config = loadHarnessConfig(configPath);
+      selectedTools = Object.entries(config.aiTools ?? {})
+        .filter(([, v]) => v === true)
+        .map(([k]) => k as AdapterTool);
+    } catch {
+      // Config not available, repair all registry entries
+      selectedTools = [...new Set(entries.map(e => e.tool))];
+    }
   }
+
+  // Filter entries by selected tools
+  entries = filterByTool(entries, selectedTools);
+
+  // Build artifact plan for classified reporting
+  const plan = buildArtifactPlan(selectedTools, entries);
 
   // Ensure source templates exist
   ensureAdapterSources(cwd, entries);
@@ -173,6 +192,12 @@ async function handleRepairAdapters(
   const repaired = statuses
     .filter(s => s.status === 'synced')
     .map(s => s.projectionPath);
+  const skipped = plan
+    .filter(p => p.kind === 'skipped')
+    .map(p => ({ path: p.projectionPath, reason: p.reason }));
+  const conflicts = statuses
+    .filter(s => s.status === 'conflict')
+    .map(s => ({ path: s.projectionPath, message: s.message }));
 
   return {
     code: 0,
@@ -181,6 +206,8 @@ async function handleRepairAdapters(
       command: 'config',
       dryRun,
       repaired,
+      skipped,
+      conflicts,
       transactionId: record.id,
     },
     warnings: dryRun ? ['Dry-run mode: no files were written'] : [],

@@ -3,21 +3,16 @@
  * @module capabilities/safety
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { resolve, relative, join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { resolve, relative, join, dirname } from 'node:path';
 import type { SafetyPolicy, SafetyCheckResult, SafetyViolation } from './types.js';
 import type { HarnessConfig } from '../../core/types.js';
+import { getBaselineSecretPatterns, getBaselineDangerousCommands } from '../../core/safety-baseline.js';
 
-const BLOCKED_COMMANDS = [
-  'rm -rf',
-  'git reset --hard',
-  'git clean -fdx',
-  'Remove-Item -Recurse -Force',
-  'npm publish',
-  'git push --force',
-];
+const BASELINE_COMMANDS = getBaselineDangerousCommands();
+const BLOCKED_COMMANDS = BASELINE_COMMANDS.map(c => c.pattern);
 
-const DEFAULT_SECRET_PATTERNS = ['.env', '*.key', '*.secret', '*.token', '*.pem', '*.p12'];
+const DEFAULT_SECRET_PATTERNS = getBaselineSecretPatterns();
 
 /**
  * Create safety policy from config
@@ -133,9 +128,24 @@ export function checkCommandLineSafety(command: string): SafetyCheckResult {
  * Generate dangerous-command hook script
  */
 function generateDangerousCommandHook(): string {
-  return `#!/bin/bash
+  return `#!/usr/bin/env bash
+# @managed-by: harness install
 # Hook: dangerous-command
 # 原则：不做复杂 AI 判断、输出结构化、不直接修代码、只调用 harness CLI
+
+# 项目根目录解析（跨平台降级）
+resolve_project_root() {
+  if [ -n "$HARNESS_PROJECT_ROOT" ]; then
+    echo "$HARNESS_PROJECT_ROOT"
+  elif [ -f ".harness/config/harness.config.json" ]; then
+    pwd
+  else
+    echo "WARNING: 未找到 Harness 项目根目录，当前目录可能不正确" >&2
+    pwd
+  fi
+}
+
+PROJECT_ROOT=$(resolve_project_root)
 
 BLOCKED_COMMANDS=("rm -rf" "git reset --hard" "git clean -fdx" "Remove-Item -Recurse -Force" "npm publish" "git push --force")
 INPUT_COMMAND="$1"
@@ -156,7 +166,8 @@ exit 0
  * Generate sync-after-doc-change hook script
  */
 function generateSyncAfterDocChangeHook(): string {
-  return `#!/bin/bash
+  return `#!/usr/bin/env bash
+# @managed-by: harness install
 # Hook: sync-after-doc-change
 # 原则：不做复杂 AI 判断、输出结构化、不直接修代码、只调用 harness CLI
 
@@ -178,7 +189,8 @@ exit 0
  * Generate review-before-push hook script
  */
 function generateReviewBeforePushHook(): string {
-  return `#!/bin/bash
+  return `#!/usr/bin/env bash
+# @managed-by: harness install
 # Hook: review-before-push
 # 原则：不做复杂 AI 判断、输出结构化、不直接修代码、只调用 harness CLI
 
@@ -204,7 +216,8 @@ exit 0
  * Generate session-summary hook script
  */
 function generateSessionSummaryHook(): string {
-  return `#!/bin/bash
+  return `#!/usr/bin/env bash
+# @managed-by: harness install
 # Hook: session-summary
 # 原则：不做复杂 AI 判断、输出结构化、不直接修代码、只调用 harness CLI
 
@@ -230,7 +243,8 @@ exit 0
  * Generate compact-state hook script
  */
 function generateCompactStateHook(): string {
-  return `#!/bin/bash
+  return `#!/usr/bin/env bash
+# @managed-by: harness install
 # Hook: compact-state
 # 原则：不做复杂 AI 判断、输出结构化、不直接修代码、只调用 harness CLI
 
@@ -431,4 +445,153 @@ note = "This agent is invoked by the harness orchestrator as part of the develop
 `;
     writeFileSync(join(codexAgentsDir, `${agent.name}.toml`), content);
   }
+}
+
+/**
+ * Project hook source files to runtime directories
+ * Generates .claude/hooks/ and .codex/hooks/ from source adapters
+ */
+export function projectRuntimeHooks(cwd: string, selectedTools: string[]): string[] {
+  const artifacts: string[] = [];
+
+  for (const tool of selectedTools) {
+    if (tool === 'claude') {
+      // Project Claude hooks to runtime
+      const srcHooksDir = join(cwd, '.harness', 'adapters', 'claude', 'hooks');
+      const runtimeHooksDir = join(cwd, '.claude', 'hooks');
+      const srcSettings = join(cwd, '.harness', 'adapters', 'claude', 'settings.json');
+      const runtimeSettings = join(cwd, '.claude', 'settings.json');
+
+      if (existsSync(srcHooksDir)) {
+        mkdirSync(runtimeHooksDir, { recursive: true });
+        const hookFiles = ['dangerous-command.sh', 'sync-after-doc-change.sh', 'review-before-push.sh', 'session-summary.sh', 'compact-state.sh'];
+        for (const f of hookFiles) {
+          const src = join(srcHooksDir, f);
+          const dst = join(runtimeHooksDir, f);
+          if (existsSync(src)) {
+            copyFileSync(src, dst);
+            artifacts.push(`.claude/hooks/${f}`);
+          }
+        }
+      }
+
+      // Project Claude settings.json to runtime
+      if (existsSync(srcSettings)) {
+        mkdirSync(dirname(runtimeSettings), { recursive: true });
+        copyFileSync(srcSettings, runtimeSettings);
+        artifacts.push('.claude/settings.json');
+      }
+    }
+
+    if (tool === 'codex') {
+      // Project Codex hooks to runtime
+      const srcHooksDir = join(cwd, '.harness', 'adapters', 'codex', 'hooks');
+      const runtimeHooksDir = join(cwd, '.codex', 'hooks');
+      const srcHooksJson = join(cwd, '.harness', 'adapters', 'codex', 'hooks.json');
+      const runtimeHooksJson = join(cwd, '.codex', 'hooks.json');
+
+      if (existsSync(srcHooksDir)) {
+        mkdirSync(runtimeHooksDir, { recursive: true });
+        const hookFiles = ['dangerous-command.sh', 'sync-after-doc-change.sh', 'review-before-push.sh', 'session-summary.sh', 'compact-state.sh'];
+        for (const f of hookFiles) {
+          const src = join(srcHooksDir, f);
+          const dst = join(runtimeHooksDir, f);
+          if (existsSync(src)) {
+            copyFileSync(src, dst);
+            artifacts.push(`.codex/hooks/${f}`);
+          }
+        }
+      }
+
+      // Project Codex hooks.json to runtime
+      if (existsSync(srcHooksJson)) {
+        mkdirSync(dirname(runtimeHooksJson), { recursive: true });
+        copyFileSync(srcHooksJson, runtimeHooksJson);
+        artifacts.push('.codex/hooks.json');
+      }
+    }
+  }
+
+  return artifacts;
+}
+
+/**
+ * Check hook consistency between source and runtime projections
+ * Returns mismatched hook paths, or empty array if consistent
+ * @returns hook consistency check result with mismatched paths
+ */
+export function checkHookConsistency(cwd: string, selectedTools: string[]): {
+  consistent: boolean;
+  mismatched: { tool: string; path: string; reason: string }[];
+  errorCode: number | null;
+} {
+  const mismatched: { tool: string; path: string; reason: string }[] = [];
+
+  for (const tool of selectedTools) {
+    if (tool === 'claude') {
+      const srcHooksDir = join(cwd, '.harness', 'adapters', 'claude', 'hooks');
+      const runtimeHooksDir = join(cwd, '.claude', 'hooks');
+      const srcSettings = join(cwd, '.harness', 'adapters', 'claude', 'settings.json');
+      const runtimeSettings = join(cwd, '.claude', 'settings.json');
+
+      if (existsSync(srcHooksDir) && !existsSync(runtimeHooksDir)) {
+        mismatched.push({ tool: 'claude', path: '.claude/hooks/', reason: 'runtime directory missing' });
+      }
+      if (existsSync(srcSettings) && !existsSync(runtimeSettings)) {
+        mismatched.push({ tool: 'claude', path: '.claude/settings.json', reason: 'runtime config missing' });
+      }
+    }
+
+    if (tool === 'codex') {
+      const srcHooksDir = join(cwd, '.harness', 'adapters', 'codex', 'hooks');
+      const runtimeHooksDir = join(cwd, '.codex', 'hooks');
+      const srcHooksJson = join(cwd, '.harness', 'adapters', 'codex', 'hooks.json');
+      const runtimeHooksJson = join(cwd, '.codex', 'hooks.json');
+
+      if (existsSync(srcHooksDir) && !existsSync(runtimeHooksDir)) {
+        mismatched.push({ tool: 'codex', path: '.codex/hooks/', reason: 'runtime directory missing' });
+      }
+      if (existsSync(srcHooksJson) && !existsSync(runtimeHooksJson)) {
+        mismatched.push({ tool: 'codex', path: '.codex/hooks.json', reason: 'runtime config missing' });
+      }
+    }
+  }
+
+  return {
+    consistent: mismatched.length === 0,
+    mismatched,
+    errorCode: mismatched.length > 0 ? 2703 : null,
+  };
+}
+
+/**
+ * Build hook trust/activation guidance for install summary and doctor
+ */
+export function buildHookActivationGuidance(selectedTools: string[], hookStrength: string): {
+  claude: string[];
+  codex: string[];
+} {
+  const guidance: { claude: string[]; codex: string[] } = { claude: [], codex: [] };
+
+  if (hookStrength !== 'full') return guidance;
+
+  if (selectedTools.includes('claude')) {
+    guidance.claude = [
+      'Hook 激活状态：已启用',
+      '配置文件：.claude/settings.json',
+      'Hook 事件：PreToolUse(dangerous-command, review-before-push), PostToolUse(sync-after-doc-change), SessionEnd(session-summary), PreCompact(compact-state)',
+      '激活方式：Claude Code 自动读取项目 .claude/settings.json',
+    ];
+  }
+
+  if (selectedTools.includes('codex')) {
+    guidance.codex = [
+      '⚠️ Hook 信任提醒：需要在 Codex 中检查并信任项目本地 hooks',
+      '配置文件：.codex/hooks.json',
+      '信任操作：在 Codex 设置中启用项目级别 hooks 信任',
+      '验证方式：检查 .codex/hooks/ 目录下的脚本是否存在且可执行',
+    ];
+  }
+
+  return guidance;
 }

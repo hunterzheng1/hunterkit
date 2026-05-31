@@ -3,7 +3,7 @@
  * @module cli/output
  */
 
-import type { CliResponse, CliIo } from './types.js';
+import type { CliResponse, CliIo, InstallSummary } from './types.js';
 
 /**
  * Write a CliResponse to the appropriate output stream
@@ -37,6 +37,39 @@ export function formatHumanSummary(response: CliResponse, noColor = false): stri
 
     if (response.data) {
       const data = response.data;
+
+      // 安装摘要六类信息（优先展示）
+      if (data.installSummary) {
+        const summary = data.installSummary as InstallSummary;
+        lines.push(`  Selected AI tools: ${summary.selectedAiTools.length > 0 ? summary.selectedAiTools.join(', ') : 'none'}`);
+        lines.push(`  Selected capabilities: ${summary.selectedCapabilities.length > 0 ? summary.selectedCapabilities.join(', ') : 'none'}`);
+        lines.push(`  Hook strength: ${summary.hookStrength}`);
+        lines.push(`  Write strategy: ${summary.writeStrategy}`);
+
+        // Runtime projections written
+        lines.push('  Runtime projections written:');
+        if (summary.runtimeProjectionsWritten.length > 0) {
+          for (const artifact of summary.runtimeProjectionsWritten) {
+            const kind = artifact.kind ?? 'runtime';
+            lines.push(`    - [${kind}] ${artifact.path}`);
+          }
+        } else {
+          lines.push('    none');
+        }
+
+        // Runtime projections skipped
+        lines.push('  Runtime projections skipped:');
+        if (summary.runtimeProjectionsSkipped.length > 0) {
+          for (const artifact of summary.runtimeProjectionsSkipped) {
+            const reason = artifact.reason ? ` (${artifact.reason})` : '';
+            lines.push(`    - [${artifact.kind ?? 'skipped'}] ${artifact.path}${reason}`);
+          }
+        } else {
+          lines.push('    none');
+        }
+      }
+
+      // 常规字段
       if (data.command) {
         lines.push(`  Command: ${data.command}`);
       }
@@ -52,7 +85,9 @@ export function formatHumanSummary(response: CliResponse, noColor = false): stri
     if (response.artifacts && response.artifacts.length > 0) {
       lines.push('  Artifacts:');
       for (const artifact of response.artifacts) {
-        lines.push(`    - [${artifact.type}] ${artifact.path}${artifact.description ? ` (${artifact.description})` : ''}`);
+        const kind = artifact.kind ?? artifact.type;
+        const toolInfo = artifact.tool ? ` (${artifact.tool})` : '';
+        lines.push(`    - [${kind}] ${artifact.path}${artifact.description ? ` (${artifact.description})` : ''}${toolInfo}`);
       }
     }
   } else {

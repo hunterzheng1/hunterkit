@@ -12,7 +12,10 @@ import { renderProjection, isManagedProjection, MANAGED_MARKER } from '../../src
 import { checkAdapterDrift } from '../../src/adapters/drift-detector.js';
 import { planProjectionWrites, applyProjectionWrites } from '../../src/adapters/projection-writer.js';
 import { beginTransaction, commitTransaction } from '../../src/core/transaction.js';
-import type { AdapterRegistryEntry } from '../../src/adapters/types.js';
+import { buildArtifactPlan, getExpectedRuntimePaths } from '../../src/adapters/artifact-plan.js';
+import { computeSourceHash, buildManagedMetadata, renderMetadataComment } from '../../src/adapters/metadata.js';
+import { renderClaudeFindingValidatorAgent, renderCodexFindingValidatorToml } from '../../src/adapters/agent-templates.js';
+import type { AdapterRegistryEntry, AdapterTool } from '../../src/adapters/types.js';
 
 function createTempProject(): string {
   return mkdtempSync(join(tmpdir(), 'harness-adapter-test-'));
@@ -281,5 +284,229 @@ describe('applyProjectionWrites', () => {
     for (const entry of entries) {
       expect(existsSync(join(tempDir, entry.projectionPath))).toBe(false);
     }
+  });
+});
+
+// ============================================================
+// TASK-ADP-01: Skill 源结构合规测试
+// ============================================================
+describe('TASK-ADP-01: Shared skill source compliance', () => {
+  let tempDir: string;
+  beforeEach(() => { tempDir = createTempProject(); });
+  afterEach(() => cleanupTempProject(tempDir));
+
+  it('generates SKILL.md for each tool adapter', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    // 每个工具适配器都应生成 SKILL.md
+    for (const entry of entries) {
+      if (entry.sourcePath.includes('SKILL.md')) {
+        const fullPath = join(tempDir, entry.sourcePath);
+        expect(existsSync(fullPath)).toBe(true);
+      }
+    }
+  });
+
+  it('generates references/scripts/assets directories in shared tree', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    const base = join(tempDir, '.harness/adapters/shared/skills/harness');
+    expect(existsSync(join(base, 'references'))).toBe(true);
+    expect(existsSync(join(base, 'scripts'))).toBe(true);
+    expect(existsSync(join(base, 'assets'))).toBe(true);
+  });
+
+  it('tool SKILL.md content describes harness capabilities', () => {
+    const entries = createAdapterRegistry();
+    ensureAdapterSources(tempDir, entries);
+    // 使用 claude 工具的 SKILL.md 检查内容
+    const claudeSkillEntry = entries.find(
+      e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'),
+    );
+    expect(claudeSkillEntry).toBeDefined();
+    const content = readFileSync(join(tempDir, claudeSkillEntry!.sourcePath), 'utf-8');
+    // 应包含能力路由或统一入口描述
+    expect(content).toMatch(/harness|inspect|sync|develop|review|knowledge/i);
+  });
+});
+
+// ============================================================
+// TASK-ADP-02: 运行时薄投影测试
+// ============================================================
+describe('TASK-ADP-02: Runtime thin projection', () => {
+  let tempDir: string;
+  beforeEach(() => { tempDir = createTempProject(); });
+  afterEach(() => cleanupTempProject(tempDir));
+
+  it('Claude runtime SKILL.md is thin projection', () => {
+    const entries = createAdapterRegistry();
+    const claudeEntry = entries.find(
+      e => e.tool === 'claude' && e.sourcePath.includes('SKILL.md'),
+    );
+    expect(claudeEntry).toBeDefined();
+    const rendered = renderProjection(claudeEntry!, 'route: harness inspect');
+    // 薄投影：不应包含大量 references 内容
+    expect(rendered.length).toBeLessThan(5000);
+    // 必须包含 managed marker
+    expect(rendered).toContain(MANAGED_MARKER);
+    // 必须包含 repair 指针
+    expect(rendered).toContain('harness config --repair-adapters');
+  });
+
+  it('Codex runtime SKILL.md is thin projection', () => {
+    const entries = createAdapterRegistry();
+    const codexEntry = entries.find(
+      e => e.tool === 'codex' && e.sourcePath.includes('SKILL.md'),
+    );
+    expect(codexEntry).toBeDefined();
+    const rendered = renderProjection(codexEntry!, 'route: harness inspect');
+    expect(rendered.length).toBeLessThan(5000);
+    expect(rendered).toContain(MANAGED_MARKER);
+  });
+
+  it('Codex runtime not written when codex is unselected', () => {
+    const entries = createAdapterRegistry();
+    const plan = buildArtifactPlan(['claude'], entries);
+    const skipped = plan.filter(p => p.kind === 'skipped');
+    const codexSkipped = skipped.filter(s => s.tool === 'codex');
+    expect(codexSkipped.length).toBeGreaterThan(0);
+    for (const s of codexSkipped) {
+      expect(s.reason).toBe('tool not selected');
+    }
+  });
+
+  it('Unselected tool artifact plan records skipped reason', () => {
+    const entries = createAdapterRegistry();
+    const selectedTools: AdapterTool[] = ['claude'];
+    const plan = buildArtifactPlan(selectedTools, entries);
+    const skippedItems = plan.filter(p => p.kind === 'skipped');
+    expect(skippedItems.length).toBeGreaterThan(0);
+    expect(skippedItems.every(s => s.reason === 'tool not selected')).toBe(true);
+  });
+});
+
+// ============================================================
+// TASK-ADP-03: Agent 定义质量测试
+// ============================================================
+describe('TASK-ADP-03: Agent definition quality', () => {
+  it('Claude agent md has required frontmatter', () => {
+    const agent = renderClaudeFindingValidatorAgent();
+    expect(agent).toContain('---');
+    expect(agent).toContain('name: harness-finding-validator');
+    expect(agent).toContain('description:');
+    expect(agent).toContain('tools:');
+    // 职责边界
+    expect(agent).toContain('## 职责边界');
+    expect(agent).toContain('## 输入格式');
+    expect(agent).toContain('## 输出格式');
+    expect(agent).toContain('## 禁止事项');
+    expect(agent).toContain('## 触发场景');
+  });
+
+  it('Codex agent TOML has required fields', () => {
+    const toml = renderCodexFindingValidatorToml();
+    expect(toml).toContain('[agent]');
+    expect(toml).toContain('name = "harness-finding-validator"');
+    expect(toml).toContain('model =');
+    expect(toml).toContain('effort =');
+    expect(toml).toContain('[agent.constraints]');
+    expect(toml).toContain('[agent.prompt]');
+    expect(toml).toContain('[agent.body]');
+  });
+
+  it('Finding validator agent is actionable', () => {
+    const agent = renderClaudeFindingValidatorAgent();
+    // 必须包含验证证据、文件行号、严重度、置信度
+    expect(agent).toMatch(/evidence|证据/i);
+    expect(agent).toMatch(/severity|严重度|P0|P1|P2/i);
+    expect(agent).toMatch(/confidence|置信度|high|medium|low/i);
+    expect(agent).toMatch(/false.?positive|误报/i);
+    // 禁止模糊措辞
+    expect(agent).toContain('不得跳过验证直接通过');
+    expect(agent).toContain('不得在没有文件/行号证据的情况下确认');
+  });
+
+  it('Codex finding validator is actionable', () => {
+    const toml = renderCodexFindingValidatorToml();
+    expect(toml).toMatch(/evidence|证据/i);
+    expect(toml).toMatch(/severity|严重度|P0|P1|P2/i);
+    expect(toml).toMatch(/confidence|置信度|high|medium|low/i);
+    expect(toml).toMatch(/false.?positive|误报/i);
+  });
+
+  it('Agent definitions match between Claude and Codex', () => {
+    const claudeAgent = renderClaudeFindingValidatorAgent();
+    const codexToml = renderCodexFindingValidatorToml();
+    // 两者应包含相同的验证器名称
+    expect(claudeAgent).toContain('harness-finding-validator');
+    expect(codexToml).toContain('harness-finding-validator');
+    // 两者都应包含验证职责
+    expect(claudeAgent).toMatch(/验证|validate/i);
+    expect(codexToml).toMatch(/验证|validate|validator/i);
+  });
+});
+
+// ============================================================
+// TASK-ADP-10: Artifact plan 补充测试
+// ============================================================
+describe('TASK-ADP-10: Artifact plan', () => {
+  it('builds artifact plan with source/runtime/skipped classification', () => {
+    const entries = createAdapterRegistry();
+    const plan = buildArtifactPlan(['claude'], entries);
+    expect(plan.length).toBeGreaterThan(0);
+    const kinds = new Set(plan.map(p => p.kind));
+    expect(kinds.has('source')).toBe(true);
+    expect(kinds.has('runtime')).toBe(true);
+    expect(kinds.has('skipped')).toBe(true);
+  });
+
+  it('getExpectedRuntimePaths returns correct paths for Claude', () => {
+    const entries = createAdapterRegistry();
+    const paths = getExpectedRuntimePaths('claude', entries);
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths.some(p => p.includes('.claude'))).toBe(true);
+  });
+
+  it('getExpectedRuntimePaths returns correct paths for Codex', () => {
+    const entries = createAdapterRegistry();
+    const paths = getExpectedRuntimePaths('codex', entries);
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths.some(p => p.includes('.codex') || p.includes('.agents'))).toBe(true);
+  });
+});
+
+// ============================================================
+// Metadata 模块测试
+// ============================================================
+describe('Metadata module', () => {
+  it('computeSourceHash produces consistent output', () => {
+    const hash1 = computeSourceHash('test content');
+    const hash2 = computeSourceHash('test content');
+    expect(hash1).toBe(hash2);
+    expect(hash1.length).toBe(16);
+  });
+
+  it('computeSourceHash produces different output for different content', () => {
+    const hash1 = computeSourceHash('content A');
+    const hash2 = computeSourceHash('content B');
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('buildManagedMetadata includes all required fields', () => {
+    const meta = buildManagedMetadata('test', 'src/test.md');
+    expect(meta.sourceHash).toBeDefined();
+    expect(meta.sourcePath).toBe('src/test.md');
+    expect(meta.managedMarker).toBeDefined();
+    expect(meta.repairCommand).toBeDefined();
+    expect(meta.generatedAt).toBeDefined();
+  });
+
+  it('renderMetadataComment includes all fields', () => {
+    const meta = buildManagedMetadata('test', 'src/test.md');
+    const comment = renderMetadataComment(meta);
+    expect(comment).toContain('harness-managed');
+    expect(comment).toContain(meta.sourcePath);
+    expect(comment).toContain(meta.sourceHash);
+    expect(comment).toContain(meta.repairCommand);
   });
 });

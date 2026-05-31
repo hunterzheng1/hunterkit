@@ -4,6 +4,7 @@
  */
 
 import type { AdapterRegistryEntry, AdapterTool } from './types.js';
+import { DEFAULT_REPAIR_COMMAND } from './metadata.js';
 
 /** Shared harness skill template */
 const SHARED_SKILL_TEMPLATE = `# Harness Skill
@@ -102,30 +103,45 @@ export function createAdapterRegistry(): AdapterRegistryEntry[] {
       sourcePath: '.harness/adapters/claude/skills/harness/SKILL.md',
       projectionPath: '.claude/skills/harness/SKILL.md',
       templateContent: SHARED_SKILL_TEMPLATE,
+      kind: 'source',
+      sourceKind: 'skill',
+      repairCommand: DEFAULT_REPAIR_COMMAND,
     },
     {
       tool: 'codex',
       sourcePath: '.harness/adapters/codex/skills/harness/SKILL.md',
       projectionPath: '.agents/skills/harness/SKILL.md',
       templateContent: SHARED_SKILL_TEMPLATE,
+      kind: 'source',
+      sourceKind: 'skill',
+      repairCommand: DEFAULT_REPAIR_COMMAND,
     },
     {
       tool: 'codex',
       sourcePath: '.harness/adapters/codex/skills/harness/agents/openai.yaml',
       projectionPath: '.agents/skills/harness/agents/openai.yaml',
       templateContent: CODEX_AGENT_TEMPLATE,
+      kind: 'source',
+      sourceKind: 'metadata',
+      repairCommand: DEFAULT_REPAIR_COMMAND,
     },
     {
       tool: 'copilot',
       sourcePath: '.harness/adapters/copilot/skills/harness/SKILL.md',
       projectionPath: '.github/copilot-instructions.md',
       templateContent: COPILOT_INSTRUCTIONS_TEMPLATE,
+      kind: 'source',
+      sourceKind: 'skill',
+      repairCommand: DEFAULT_REPAIR_COMMAND,
     },
     {
       tool: 'cursor',
       sourcePath: '.harness/adapters/cursor/skills/harness/SKILL.md',
       projectionPath: '.cursor/skills/harness/SKILL.md',
       templateContent: SHARED_SKILL_TEMPLATE,
+      kind: 'source',
+      sourceKind: 'skill',
+      repairCommand: DEFAULT_REPAIR_COMMAND,
     },
   ];
 }

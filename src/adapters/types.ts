@@ -60,4 +60,35 @@ export interface AdapterRegistryEntry {
   sourcePath: string;
   projectionPath: string;
   templateContent: string;
+  /** artifact kind: source/runtime/config/report */
+  kind?: 'source' | 'runtime' | 'config' | 'report';
+  /** source tree type: skill/metadata/agent */
+  sourceKind?: 'skill' | 'metadata' | 'agent';
+  /** required companion files for source tree */
+  requiredFiles?: string[];
+  /** managed metadata */
+  metadata?: ProjectionMetadata;
+  /** repair command hint */
+  repairCommand?: string;
+  /** skip reason (when unselected) */
+  skipReason?: 'tool not selected' | 'dry-run' | 'not applicable';
+}
+
+/** Projection managed metadata */
+export interface ProjectionMetadata {
+  sourceHash: string;
+  sourcePath: string;
+  managedMarker: string;
+  repairCommand: string;
+  generatedAt: string;
+}
+
+/** Artifact plan entry */
+export interface ArtifactPlanEntry {
+  tool: AdapterTool;
+  sourcePath: string;
+  projectionPath: string;
+  kind: 'source' | 'runtime' | 'skipped';
+  status: 'planned' | 'generated' | 'skipped' | 'conflict';
+  reason?: string;
 }

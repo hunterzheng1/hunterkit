@@ -27,6 +27,19 @@ export interface GlobalOptions {
   noColor: boolean;
 }
 
+/** AI 工具标识符 */
+export type AiToolId = 'claude' | 'codex' | 'copilot' | 'cursor';
+
+/** Artifact 分类类型 */
+export type ArtifactKind = 'workspace' | 'config' | 'source' | 'runtime' | 'report' | 'skipped';
+
+/** AI CLI 上下文信息 */
+export interface AiCliContext {
+  tool: 'Claude Code' | 'Codex' | 'Unknown';
+  source: 'env' | 'unknown';
+  sessionId?: string;
+}
+
 /** Artifact produced by a command */
 export interface CliArtifact {
   /** Artifact type (e.g., 'file', 'directory', 'report') */
@@ -35,6 +48,22 @@ export interface CliArtifact {
   path: string;
   /** Human-readable description */
   description?: string;
+  /** 分类标签（source/runtime/workspace/config/report/skipped） */
+  kind?: ArtifactKind;
+  /** 关联的 AI 工具 */
+  tool?: AiToolId;
+  /** 跳过原因（仅当 kind=skipped） */
+  reason?: 'tool not selected' | 'dry-run' | 'not applicable';
+}
+
+/** 安装摘要 */
+export interface InstallSummary {
+  selectedAiTools: string[];
+  selectedCapabilities: string[];
+  hookStrength: string;
+  writeStrategy: string;
+  runtimeProjectionsWritten: CliArtifact[];
+  runtimeProjectionsSkipped: CliArtifact[];
 }
 
 /** Unified CLI response body */

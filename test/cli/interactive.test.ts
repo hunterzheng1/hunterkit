@@ -116,18 +116,16 @@ describe('runInitWizard', () => {
     expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
   });
 
-  it('should handle step 2 with "skip" (no AI tools) → defaults to claude', async () => {
+  it('should return error 1010 when no AI tools selected', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
     mockCheckbox.mockResolvedValueOnce([]);  // no selection
-    mockCheckbox.mockResolvedValueOnce(['inspect']);
-    mockSelect.mockResolvedValueOnce('node');
-    mockSelect.mockResolvedValueOnce('write');
-    mockSelect.mockResolvedValueOnce('none');
 
     const context = createMockContext();
     const response = await runInitWizard(context);
 
-    expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
+    expect(response.code).toBe(1010);
+    expect(response.msg).toBe('No AI tool selected');
+    expect(response.data.suggestion).toBe('请选择至少一个 AI 工具');
   });
 
   it('should handle step 3 with "all" capabilities', async () => {

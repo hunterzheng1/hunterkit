@@ -1,97 +1,85 @@
-# spec.md - 能力规格定义（增量）
+## ADDED Requirements
 
-> **定位**：`harness-adapter-skill-runtime` — Skill/adapter 口径统一，让用户自然语言和 AI 工具 CLI 触发统一 Harness CLI
-> **增量说明**：本文档为对 `openspec/specs/harness-adapter-skill-runtime/spec.md` 的增量修改
-> **【质量红线】严禁描述模糊；约束必须量化
-> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+### Requirement: Harness Skill source tree compliance
+系统 MUST 生成符合《CLAUDE_CODE_CODEX_SKILLS_AGENTS_HOOKS_GUIDE.md》的单一 `harness` Skill 源结构，并且必须保持“一个用户可见 Skill，多能力路由”的产品边界。
 
----
+#### Scenario: Shared Skill source contains standard files
+- **WHEN** 初始化或 repair 流程生成 `.harness/adapters/shared/skills/harness/`
+- **THEN** 系统 MUST 至少生成 `SKILL.md`、`references/`、`scripts/`、`assets/`，且 `SKILL.md` 必须描述 inspect、sync、develop、review、knowledge 的统一入口职责
 
-## 1. 需求规格（官方格式）
+#### Scenario: Tool adapter source remains complete
+- **WHEN** 用户选择 Claude Code 或 Codex 适配
+- **THEN** 系统 MUST 在 `.harness/adapters/<tool>/skills/harness/` 保留该工具需要的源模板或完整资料，且不得出现只有 `SKILL.md` 而缺少 references/scripts/assets 来源的割裂状态
 
-### 新增需求
+#### Scenario: Runtime Skill remains a thin projection
+- **WHEN** 系统写入 `.claude/skills/harness/SKILL.md` 或 `.agents/skills/harness/SKILL.md`
+- **THEN** 运行时文件 MUST 只保留最小路由说明、frontmatter、repair 指针和 CLI 映射，不得复制大型 references/scripts/assets 内容到运行时根目录
 
-#### 需求项：Skill frontmatter 不暴露内部来源名
+### Requirement: Selected AI tool runtime projection
+系统 MUST 只为用户选择的 AI 工具生成可被该工具识别的运行时投影，并且必须在安装摘要和配置中准确记录选择结果。
 
-系统必须确保 Skill 投影文件的 frontmatter `description` 和 body 中不暴露 DocSync、GSD、kld-sdd、kld-review 等内部来源项目名。
+#### Scenario: Claude runtime projection
+- **WHEN** `aiTools.claude` 为 `true`
+- **THEN** 系统 MUST 生成 `.claude/skills/harness/SKILL.md`，并在需要 agent 时生成 `.claude/agents/*.md`；生成的 Skill frontmatter MUST 包含 `name`、`description`、`when_to_use`、`allowed-tools`、`paths`
 
-##### 场景：Claude SKILL.md 描述审计
-- **当** 生成 `.claude/skills/harness/SKILL.md`
-- **预期** `description` 字段必须使用 "个人开发工具统一 CLI 入口" 或等价描述，不得出现 `docsync`、`gsd`、`kld-sdd`、`kld-review` 字样
+#### Scenario: Codex runtime projection
+- **WHEN** `aiTools.codex` 为 `true`
+- **THEN** 系统 MUST 生成 `.agents/skills/harness/SKILL.md` 和 `.agents/skills/harness/agents/openai.yaml`，并在需要 custom agents 时生成 `.codex/agents/*.toml`
 
-##### 场景：Codex SKILL.md 描述审计
-- **当** 生成 `.agents/skills/harness/SKILL.md`
-- **预期** `description` 字段必须使用对外统一描述，不含内部来源项目名
+#### Scenario: Unselected tool runtime is not written
+- **WHEN** `aiTools.codex` 为 `false`
+- **THEN** 系统 MUST NOT 写入 `.agents/skills/harness/SKILL.md`、`.agents/skills/harness/agents/openai.yaml` 或 `.codex/agents/*.toml`；但安装摘要 MUST 明确展示 Codex 未选择，避免用户误判为漏装
 
-##### 场景：references 文件描述审计
-- **当** 生成 `references/*.md` 参考文档
-- **预期** 文档中的能力来源说明不得出现 `docsync`、`gsd`、`kld-sdd`、`kld-review` 作为对外命令名
+### Requirement: Harness agent definitions are guide-quality
+系统 MUST 生成可被目标 AI 工具理解的 agent 定义，而非只有名称和一句描述的占位符。
 
-#### 需求项：Skill 引导 AI 工具 CLI 触发而非手动 shell
+#### Scenario: Claude agent frontmatter
+- **WHEN** 系统生成 `.harness/adapters/claude/agents/*.md` 或 `.claude/agents/*.md`
+- **THEN** 每个 agent 文件 MUST 包含 `name`、`description`、`tools` 或等价工具约束、职责边界、输入输出格式、禁止事项和适用触发场景
 
-系统必须确保 Skill 的 body 和 description 引导 AI 工具在对话中触发 Harness 命令，而非引导用户手动在终端输入命令。
+#### Scenario: Codex custom agent TOML
+- **WHEN** 系统生成 `.harness/adapters/codex/agents/*.toml` 或 `.codex/agents/*.toml`
+- **THEN** 每个 TOML 文件 MUST 包含 agent 名称、model/effort 或等价执行配置、职责说明、工具约束、prompt/body，且内容必须与对应 Claude agent 职责一致
 
-##### 场景：Skill body 示例格式
-- **当** AI 工具加载 SKILL.md
-- **预期** body 中的使用示例必须写成 "当用户说「审查代码」时，执行 `harness review --local`"，而非 "在终端输入 `harness review --local`"
+#### Scenario: Finding validator is actionable
+- **WHEN** 系统生成 `harness-finding-validator` agent
+- **THEN** 该 agent MUST 明确要求验证证据、文件行号、严重度、置信度和误报处理，不得只是泛化描述“validate findings”
 
-##### 场景：Skill when_to_use 描述
-- **当** AI 工具评估是否触发 Skill
-- **预期** `when_to_use` 字段必须描述用户意图触发场景（如 "用户请求代码审查时"），而非 "用户在终端输入 review 命令时"
+### Requirement: Adapter repair verifies generated artifacts
+系统 MUST 提供 adapter repair / reinstall 路径，确保已安装项目可从 `.harness/adapters/**` 重新生成运行时 Skill、Agent 和 Hook 投影。
 
-### 修改需求
+#### Scenario: Repair detects missing runtime Skill
+- **WHEN** `.harness/adapters/shared/skills/harness/SKILL.md` 存在但 `.claude/skills/harness/SKILL.md` 缺失
+- **THEN** repair 或 doctor 建议 MUST 标记缺失的 Claude runtime Skill，并给出可执行的修复命令
 
-#### 需求项：Skill 投影 frontmatter 完整性
-
-系统必须为 Claude/Codex 投影文件生成完整的 frontmatter，而非缺失。
-
-**增量修改**：补充 internal source 名称屏蔽约束。
-
-##### 场景：Claude SKILL.md frontmatter（补充约束）
-- **当** 用户选择 Claude Code 并完成初始化
-- **预期** 系统生成 `name`、`description`、`when_to_use`、`argument-hint`、`user-invocable`、`disable-model-invocation`、`allowed-tools`、`model`、`effort`、`paths` — 其中 `description` 和 `when_to_use` 不得包含内部来源项目名
-
-#### 需求项：Copilot/Cursor adapter 实现
-
-系统必须实现 Copilot 和 Cursor adapter，生成对应的投影文件。
-
-**增量修改**：新增 adapter 内容审计约束 — Copilot/Cursor 投影文件同样遵循内部名称屏蔽规则。
-
-##### 场景：生成 Copilot 指令文件（补充约束）
-- **当** 用户选择 Copilot 适配
-- **预期** `.github/copilot-instructions.md` 中的能力描述和命令引用不得出现内部来源项目名
+#### Scenario: Repair detects stale runtime projection
+- **WHEN** runtime projection 的 managed marker 指向的 source hash 与当前 `.harness/adapters/**` 不一致
+- **THEN** 系统 MUST 标记为 drift，并在 repair 后重写 runtime projection，同时保留用户非托管内容
 
 ---
 
-## 3. 技术契约（SDD 扩展）
+## SDD Extension
 
-### 内部名称屏蔽规则
+### Interface Contract
 
-| 屏蔽词 | 替换词 |
-|-------|-------|
-| `docsync` | `sync`（同步） |
-| `gsd` | 不可出现 |
-| `kld-sdd` | `develop`（开发工作流） |
-| `kld-review` | `review`（代码审查） |
+| 项目 | 契约 |
+|------|------|
+| CLI path | `harness init` / `npx @hunterzheng/harness` / repair 内部流程 |
+| 输出类型 | 文件投影与 `CliArtifact[]` 安装摘要 |
+| 版本依赖 | Node.js `>=20.0.0`，commander `^12.1.0` |
 
-**适用范围**：所有投影文件的用户可见文本，包括 SKILL.md、references/*.md、agent 定义文件、copilot-instructions.md。
+### Error Codes
 
----
-
-## 4. 影响模块
-
-### 4.1 内部依赖
-- [ ] `src/adapters/projection-renderer.ts`：frontmatter 生成时过滤内部来源名
-- [ ] `src/adapters/projection-writer.ts`：生成投影文件时应用名称屏蔽规则
-- [ ] `src/adapters/source-manager.ts`：源模板文件（references/scripts/assets）内容审计后更新
-- [ ] `.harness/adapters/shared/skills/harness/references/*.md`：更新已有 references 文件
-- [ ] `.harness/adapters/shared/skills/harness/assets/*.md`：更新已有 assets 模板文件
-
----
+| 错误码 | 含义 | 触发条件 |
+|-------|------|----------|
+| 2601 | Skill 源结构缺失 | shared 或 tool adapter 缺少 `SKILL.md` / references / scripts / assets |
+| 2602 | Runtime Skill 投影缺失 | 已选择工具缺少 `.claude/skills/**` 或 `.agents/skills/**` |
+| 2603 | Agent 定义不合规 | agent 缺少 frontmatter/TOML 必填字段 |
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（2 新增 + 2 修改 = 4 个需求项，8 个场景）
-> - [x] 使用「必须」强制要求
+> - [x] 每个需求项至少有一个场景
+> - [x] 使用「MUST / 必须」强制要求
 > - [x] 所有接口参数已量化
+> - [x] 物理约束已量化：运行时只写薄投影，源资料保留在 `.harness/adapters/**`
 > - [x] 错误码已定义
 > - [x] 技术选型已包含版本信息

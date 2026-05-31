@@ -1,0 +1,40 @@
+{
+  "change": "harness-install-artifact-compliance-fix",
+  "archived_at": "2026-05-31T14:02:36.256Z",
+  "reason": "变更已完成实施",
+  "method": "skywalk-full-spec-archive",
+  "source_path": "openspec/changes/harness-install-artifact-compliance-fix",
+  "archive_path": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix",
+  "copied_specs": [
+    {
+      "capability": "harness-adapter-skill-runtime",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-adapter-skill-runtime/spec.md",
+      "target": "openspec/specs/harness-adapter-skill-runtime/spec.md"
+    },
+    {
+      "capability": "harness-cli-entrypoint",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-cli-entrypoint/spec.md",
+      "target": "openspec/specs/harness-cli-entrypoint/spec.md"
+    },
+    {
+      "capability": "harness-quality-gates-fix",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-quality-gates-fix/spec.md",
+      "target": "openspec/specs/harness-quality-gates-fix/spec.md"
+    },
+    {
+      "capability": "harness-safety-orchestration",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-safety-orchestration/spec.md",
+      "target": "openspec/specs/harness-safety-orchestration/spec.md"
+    },
+    {
+      "capability": "harness-sync",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-sync/spec.md",
+      "target": "openspec/specs/harness-sync/spec.md"
+    },
+    {
+      "capability": "harness-workspace-config",
+      "source": "openspec/changes/archive/2026-05-31-harness-install-artifact-compliance-fix/specs/harness-workspace-config/spec.md",
+      "target": "openspec/specs/harness-workspace-config/spec.md"
+    }
+  ]
+}

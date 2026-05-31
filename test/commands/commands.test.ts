@@ -85,42 +85,57 @@ describe('runDoctorCommand', () => {
   beforeEach(() => { tempDir = createTempProject(); });
   afterEach(() => cleanupTempProject(tempDir));
 
-  it('should report NOT_INITIALIZED for empty project', async () => {
+  it('should report base.harnessDir error for empty project', async () => {
     const ctx = createTestContext(tempDir, 'doctor');
     const result = await runDoctorCommand(ctx);
-    expect(result.code).toBe(0);
-    expect((result.data as any).checks.workspace).toBe('NOT_INITIALIZED');
+    // 未初始化项目：harnessDir 检查应为 ERROR，code 非 0
+    expect(result.code).toBe(1);
+    const checks = (result.data as any).checks as Array<{ id: string; status: string }>;
+    const harnessCheck = checks.find((c: any) => c.id === 'base.harnessDir');
+    expect(harnessCheck).toBeTruthy();
+    expect(harnessCheck!.status).toBe('ERROR');
   });
 
-  it('should report OK workspace after initialization', async () => {
+  it('should report OK base checks after initialization', async () => {
     initWorkspace(tempDir);
     const ctx = createTestContext(tempDir, 'doctor');
     const result = await runDoctorCommand(ctx);
-    expect(result.code).toBe(0);
-    expect((result.data as any).checks.workspace).toBe('OK');
+    const checks = (result.data as any).checks as Array<{ id: string; status: string }>;
+    const harnessCheck = checks.find((c: any) => c.id === 'base.harnessDir');
+    expect(harnessCheck).toBeTruthy();
+    expect(harnessCheck!.status).toBe('OK');
   });
 
   it('should check Node.js version', async () => {
     const ctx = createTestContext(tempDir, 'doctor');
     const result = await runDoctorCommand(ctx);
-    expect((result.data as any).checks.nodeVersion).toBeTruthy();
-    expect((result.data as any).checks.nodeVersion).toContain('OK');
+    const checks = (result.data as any).checks as Array<{ id: string; status: string }>;
+    const nodeCheck = checks.find((c: any) => c.id === 'base.nodeVersion');
+    expect(nodeCheck).toBeTruthy();
+    expect(nodeCheck!.status).toBe('OK');
   });
 
-  it('should detect legacy sources', async () => {
-    mkdirSync(join(tempDir, '.docsync'), { recursive: true });
-    writeFileSync(join(tempDir, '.docsync', 'test.md'), 'content');
+  it('should detect legacy DocSync content in AGENTS.md', async () => {
+    initWorkspace(tempDir);
+    // 写入包含旧 docsync 命令的 AGENTS.md
+    writeFileSync(join(tempDir, 'AGENTS.md'), '<!-- docsync:start -->\nRun /docsync:sync\n<!-- docsync:end -->');
     const ctx = createTestContext(tempDir, 'doctor');
     const result = await runDoctorCommand(ctx);
-    expect((result.data as any).checks.legacySources).toContain('FOUND');
-    expect((result.data as any).legacySources.length).toBeGreaterThan(0);
+    const checks = (result.data as any).checks as Array<{ id: string; status: string }>;
+    const docCheck = checks.find((c: any) => c.id === 'managedDocs');
+    expect(docCheck).toBeTruthy();
+    expect(docCheck!.status).toBe('ERROR');
   });
 
-  it('should check directory integrity', async () => {
+  it('should check skill source structure', async () => {
     initWorkspace(tempDir);
     const ctx = createTestContext(tempDir, 'doctor');
     const result = await runDoctorCommand(ctx);
-    expect((result.data as any).checks.directoryIntegrity).toBe('OK');
+    const checks = (result.data as any).checks as Array<{ id: string; status: string }>;
+    const skillCheck = checks.find((c: any) => c.id === 'skillSource');
+    expect(skillCheck).toBeTruthy();
+    // 未生成 shared skill source 时应为 ERROR
+    expect(skillCheck!.status).toBe('ERROR');
   });
 });
 

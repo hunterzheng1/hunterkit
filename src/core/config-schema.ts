@@ -4,6 +4,7 @@
  */
 
 import type { ConfigValidationResult, HarnessConfig } from './types.js';
+import { getBaselineSecretPatterns } from './safety-baseline.js';
 
 /**
  * Validate a HarnessConfig object
@@ -94,6 +95,6 @@ export function createDefaultConfig(projectName: string): HarnessConfig {
     capabilities: { inspect: true, sync: true, develop: true, review: true, knowledge: false },
     documents: { managed: ['README.md', 'AGENTS.md', 'CLAUDE.md'], generatedBlockPrefix: 'harness' },
     orchestration: { subagents: 'auto', maxParallelAgents: 6, validatorRequired: true },
-    safety: { dangerousCommandsBlocked: true, secretPatterns: ['.env', '*.key', '*.secret', '*.token'] },
+    safety: { dangerousCommandsBlocked: true, secretPatterns: getBaselineSecretPatterns(), hookStrength: 'full' },
   };
 }

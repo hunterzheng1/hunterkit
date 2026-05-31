@@ -1,188 +1,78 @@
-# spec.md - 能力规格定义（增量）
+## ADDED Requirements
 
-> **定位**：`harness-workspace-config` 的实施偏移修复规格
-> **【质量红线】严禁描述模糊；约束必须量化
-> **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
+### Requirement: Installation artifact health model
+系统 MUST 在 workspace config 和状态文件中记录安装产物健康信息，使 doctor 能判断 Skill、Agent、Hook、文档投影是否与配置一致。
 
----
+#### Scenario: Install state records selected tools
+- **WHEN** 初始化完成
+- **THEN** `.harness/state/install.json` MUST 记录用户选择的 AI 工具、能力列表、Hook 强度、写入策略、生成的 runtime artifacts 和 skipped artifacts，且每条 artifact 必须包含路径、类型、tool、managed 标记
 
-## 1. 需求规格（官方格式）
+#### Scenario: Config and artifacts are consistent
+- **WHEN** `harness doctor --json` 读取 `.harness/config/harness.config.json`
+- **THEN** doctor MUST 校验 `aiTools.*` 与 runtime artifacts 一致；若 `aiTools.claude=true` 但 `.claude/skills/harness/SKILL.md` 缺失，必须报告不健康
 
-### 新增需求
+### Requirement: Doctor detects projection gaps
+系统 MUST 扩展 doctor，使其发现当前安装实测暴露的结构缺口，而不是只检查 `.harness` 目录和主配置存在。
 
-无。
+#### Scenario: Missing runtime hooks
+- **WHEN** source hooks 存在但 `.claude/hooks/`、`.claude/settings.json`、`.codex/hooks/` 或 `.codex/hooks.json` 缺失
+- **THEN** doctor MUST 输出 `projection.runtimeHooks` 诊断项，状态为 `ERROR` 或 `WARN`，并说明缺失路径
 
-### 修改需求
+#### Scenario: Missing Skill source structure
+- **WHEN** `.harness/adapters/shared/skills/harness/` 缺少 `SKILL.md`、`references/`、`scripts/` 或 `assets/`
+- **THEN** doctor MUST 输出 `skillSource` 诊断项，状态为 `ERROR`
 
-#### 需求项：工作区目录完整性
+#### Scenario: Stale root documentation
+- **WHEN** `AGENTS.md` 仍包含 DocSync 日常命令且缺少 Harness managed block
+- **THEN** doctor MUST 输出 `managedDocs` 诊断项，状态为 `ERROR`，并给出 `harness sync --repair` 或等价修复建议
 
-系统必须在初始化时创建 `.harness/` 下的全部必要子目录，包括首次实施中遗漏的目录。
+### Requirement: Doctor JSON is actionable
+系统 MUST 让 `doctor --json` 的输出可用于自动化验收和 TDD 测试。
 
-##### 场景：创建遗漏目录
-- **当** 用户完成 Harness 初始化
-- **预期** 系统必须创建 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`.harness/develop/archive/`、`.harness/develop/templates/`、`.harness/reports/sync/`、`.harness/reports/develop/`、`.harness/reports/review/` 目录
+#### Scenario: Doctor JSON structure
+- **WHEN** 用户执行 `harness doctor --json`
+- **THEN** 输出 MUST 是合法 JSON，且 `data.checks[]` 中每项必须包含 `id`、`status`、`severity`、`message`、`paths[]`、`repairCommand`
 
-##### 场景：目录幂等创建
-- **当** 部分目录已存在
-- **预期** 系统必须跳过已存在目录，只创建缺失目录，且不得报错
+#### Scenario: Doctor nonzero on error
+- **WHEN** doctor 发现 ERROR 级别的安装产物缺口
+- **THEN** 命令 MUST 返回非 0 退出码，并在 JSON 中保留所有 warning 和 error，而不是只返回第一个问题
 
-#### 需求项：配置文件完整性
+### Requirement: Safety configuration baseline
+系统 MUST 将 safety baseline 纳入配置 schema 校验，避免完整质量门配置缩水。
 
-系统必须生成完整的配置文件集合，包括首次实施中遗漏的配置文件。
+#### Scenario: Secret patterns schema check
+- **WHEN** 读取或生成 `harness.config.json`
+- **THEN** schema 校验 MUST 要求 `safety.secretPatterns` 覆盖实施方案基线；缺失项必须在 doctor 中列为 `ERROR`
 
-##### 场景：生成 review 配置
-- **当** 用户初始化且启用 review 能力
-- **预期** 系统必须生成 `.harness/config/review.config.json`，包含 reviewer 列表、confidence 阈值（默认 80）、fix 策略等字段
-
-##### 场景：生成 knowledge 配置
-- **当** 用户初始化且启用 knowledge 能力
-- **预期** 系统必须生成 `.harness/config/knowledge.config.json`，包含索引来源路径、忽略规则等字段
-
-##### 场景：本地私有配置
-- **当** 用户需要本地覆盖配置
-- **预期** 系统必须允许创建 `.harness/config/*.local.json`，并确保 `*.local.json` 不出现在报告、cache 或发布包中
-
-#### 需求项：主配置字段完整性
-
-系统必须确保 `harness.config.json` 包含所有必要字段。
-
-##### 场景：generatedBlockPrefix 字段
-- **当** 系统生成或读取 `harness.config.json`
-- **预期** 系统必须校验 `documents.generatedBlockPrefix` 字段存在且值为 `"harness"`；缺失时必须报错并提示修复
-
-##### 场景：完整配置校验
-- **当** 命令读取 `harness.config.json`
-- **预期** 系统必须校验 `schemaVersion`、`project`、`aiTools`、`capabilities`、`documents`（含 `managed` 和 `generatedBlockPrefix`）、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）字段完整
-
-### 移除需求
-
-无。
+#### Scenario: Local config remains private
+- **WHEN** 存在 `.harness/config/*.local.json`
+- **THEN** doctor MUST 确认该文件不会被安装摘要、sync 报告或发布包列为可提交产物
 
 ---
 
-## 2. 技术契约（SDD 扩展）
+## SDD Extension
 
-### 2.1 接口定义
+### Interface Contract
 
-#### 接口基本信息
-- **路径**：`CLI: harness config` / 初始化流程内部调用
-- **方法**：本地进程调用
-- **内容类型**：终端文本；`--json` 时为 `application/json`
+| 项目 | 契约 |
+|------|------|
+| CLI path | `harness status` / `harness doctor --json` |
+| 输出类型 | 标准 CLI JSON：`code`、`msg`、`data`、`warnings` |
+| 版本依赖 | Node.js `>=20.0.0` |
 
-#### 请求参数
+### Error Codes
 
-| 参数名 | 类型 | 必填 | 说明 | 示例值 | 约束条件 |
-|-------|------|------|------|--------|----------|
-| --cwd | path | 否 | 目标项目根目录 | `E:/repo/demo` | 必须是存在目录 |
-
-#### 新增目录清单
-
-```text
-.harness/docs/adr/
-.harness/docs/architecture/
-.harness/docs/decisions/
-.harness/rules/default.md
-.harness/rules/override.md
-.harness/rules/generated.md
-.harness/events/
-.harness/facts/
-.harness/generated/
-.harness/state/
-.harness/cache/
-.harness/adapters/claude/
-.harness/adapters/codex/
-.harness/adapters/copilot/
-.harness/adapters/cursor/
-.harness/develop/archive/
-.harness/develop/templates/
-.harness/reports/sync/
-.harness/reports/develop/
-.harness/reports/review/
-```
-
-#### 新增配置文件
-
-| 文件路径 | 用途 | 必填字段 |
-|---------|------|---------|
-| `.harness/config/review.config.json` | review 配置 | `reviewers`、`confidenceThreshold`、`fixPolicy` |
-| `.harness/config/knowledge.config.json` | knowledge 配置 | `sources`、`ignorePatterns` |
-| `.harness/config/*.local.json` | 本地覆盖 | 任意（用户自定义） |
-
-#### 错误码定义
 | 错误码 | 含义 | 触发条件 |
 |-------|------|----------|
-| 2105 | 目录创建失败 | 文件系统权限不足或磁盘满 |
-| 2106 | 配置文件缺失字段 | `generatedBlockPrefix` 等必填字段不存在 |
-| 2107 | 配置文件生成失败 | 写入 `review.config.json` 或 `knowledge.config.json` 失败 |
-
----
-
-## 3. 物理约束
-
-### 3.1 性能约束
-| 指标 | 约束值 | 说明 |
-|------|-------|------|
-| 目录创建时间 | < 500 毫秒 (P95) | 约 18 个目录（含子目录） |
-| 配置文件生成时间 | < 300 毫秒 (P95) | 3 个配置文件 |
-
-### 3.2 资源约束
-| 资源 | 限制 | 说明 |
-|------|------|------|
-| 存储 | < 1 MB | 新增目录和配置文件总量 |
-
-### 3.3 超时配置
-- 总超时：5000 毫秒
-
----
-
-## 4. 影响模块
-
-### 4.1 内部依赖
-- [ ] `src/core/workspace.ts`：补全 `.harness/docs/`（含 `adr/`、`architecture/`、`decisions/` 子目录）、`.harness/rules/`（含 `default.md`、`override.md`、`generated.md` 初始文件）、`.harness/events/`、`.harness/facts/`、`.harness/generated/`、`.harness/state/`、`.harness/cache/`、`.harness/adapters/`（含 `claude/`、`codex/`、`copilot/`、`cursor/` 子目录）、`develop/archive/`、`develop/templates/`、`reports/sync/`、`reports/develop/`、`reports/review/` 目录
-- [ ] `src/core/config-schema.ts`：确保 `harness.config.json` 包含 `documents.generatedBlockPrefix`、`orchestration`（含 `subagents`、`maxParallelAgents`、`validatorRequired`）、`safety`（含 `dangerousCommandsBlocked`、`secretPatterns`）等完整字段；补全 `review.config.json`、`knowledge.config.json`、`*.local.json` 配置 schema
-
-### 4.2 外部依赖
-
-| 组件类型 | 组件名称 | 版本 | 用途 | 降级策略 |
-|---------|---------|------|------|---------|
-| 运行时 | Node.js | >= 20.0.0 | 文件系统操作 | 阻断初始化 |
-
-### 4.3 数据存储
-- [ ] JSON 配置：`.harness/config/review.config.json`
-- [ ] JSON 配置：`.harness/config/knowledge.config.json`
-- [ ] JSON 配置：`.harness/config/*.local.json`
-
----
-
-## 5. 安全与合规
-
-### 5.1 权限要求
-- 认证方式：本地文件系统权限
-- 授权范围：`.harness/` 下目录和配置文件
-
-### 5.2 数据安全
-- 敏感字段：`*.local.json` 不得出现在报告或发布包中
-
-### 5.3 审计要求
-- 日志记录：创建的目录列表、配置文件路径
-
----
-
-## 6. 兼容性
-
-### 6.1 接口兼容性
-- 是否向后兼容：是
-
-### 6.2 数据兼容性
-- 数据迁移方案：已有目录跳过，缺失目录补建
-- 回滚策略：通过 transaction 回滚
-
----
+| 2110 | Artifact health error | runtime projection 与 config 不一致 |
+| 2111 | Skill source invalid | Skill 源结构缺失或不合规 |
+| 2112 | Managed docs invalid | 根文档缺少 Harness block 或仍暴露旧命令 |
+| 2113 | Safety baseline invalid | safety 配置少于基线 |
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（3 个需求项，7 个场景，约 18 个目录含子目录）
-> - [x] 使用「必须」强制要求
+> - [x] 每个需求项至少有一个场景
+> - [x] 使用「MUST / 必须」强制要求
 > - [x] 所有接口参数已量化
-> - [x] 物理约束已量化
+> - [x] 物理约束已量化：doctor JSON 必须列出 paths 和 repairCommand
 > - [x] 错误码已定义
 > - [x] 技术选型已包含版本信息

@@ -5,16 +5,9 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createHash } from 'node:crypto';
 import type { AdapterRegistryEntry, AdapterProjectionStatus } from './types.js';
 import { isManagedProjection } from './projection-renderer.js';
-
-/**
- * Compute hash of content
- */
-function hashContent(content: string): string {
-  return createHash('sha256').update(content).digest('hex').slice(0, 16);
-}
+import { computeSourceHash } from './metadata.js';
 
 /**
  * Check adapter drift status
@@ -60,7 +53,7 @@ export function checkAdapterDrift(cwd: string, entry: AdapterRegistryEntry): Ada
   }
 
   // Check if source hash in projection matches current source
-  const sourceHash = hashContent(sourceContent);
+  const sourceHash = computeSourceHash(sourceContent);
   if (projectionContent.includes(`source-hash: ${sourceHash}`)) {
     return {
       tool: entry.tool,
