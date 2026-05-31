@@ -1,6 +1,7 @@
 # spec.md - 能力规格定义（增量）
 
-> **定位**：`harness-cli-entrypoint` 的实施偏移修复规格
+> **定位**：`harness-cli-entrypoint` — 入口契约修正，确保 npx/AI 工具 CLI 使用路径、help 输出和命令参数透传一致
+> **增量说明**：本文档为对 `openspec/specs/harness-cli-entrypoint/spec.md` 的增量修改
 > **【质量红线】严禁描述模糊；约束必须量化
 > **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
 
@@ -10,73 +11,41 @@
 
 ### 新增需求
 
-无。
+#### 需求项：dist 入口 help 输出
+
+系统必须确保通过 `node dist/bin/harness.js --help` 有完整的命令帮助，而非无输出或空输出。
+
+##### 场景：dist 入口 help
+- **当** 用户执行 `node dist/bin/harness.js --help`
+- **预期** 系统必须输出包含 8 个命令列表和全局选项说明的帮助信息，不得出现空输出或 "commander output suppressed" 行为
+
+##### 场景：npx 调用 help
+- **当** 用户执行 `npx @hunterzheng/harness --help`
+- **预期** 系统必须输出与 `node dist/bin/harness.js --help` 相同的帮助信息
+
+#### 需求项：交互式入口 AI 工具 CLI 口径
+
+系统必须在交互式入口（未初始化向导和已初始化菜单）中明确体现 AI 工具 CLI 使用口径。
+
+##### 场景：向导首屏提示 AI CLI
+- **当** 用户在 AI 工具 CLI 中触发 npx 进入向导
+- **预期** 向导首屏必须提示 "由 Claude Code / Codex 触发" 或等价说明，让用户知晓当前流程由 AI 工具 CLI 驱动
+
+##### 场景：菜单提示 AI CLI
+- **当** 用户在 AI 工具 CLI 中触发 npx 进入操作菜单
+- **预期** 菜单必须提示当前操作上下文的 AI 工具类型（通过环境变量或检测）
 
 ### 修改需求
-
-#### 需求项：交互式初始化向导（6 步问题）
-
-系统必须在未初始化项目中执行 `npx @hunterzheng/harness` 时进入完整的 6 步交互式向导，而非 stub 实现。
-
-##### 场景：向导步骤 1 - 确认目标项目
-- **当** 用户启动向导
-- **预期** 系统必须展示当前目录作为默认目标项目，并允许用户指定其他路径；路径必须解析为存在的目录
-
-##### 场景：向导步骤 2 - 选择 AI 工具
-- **当** 用户进入步骤 2
-- **预期** 系统必须提供 `Claude Code`、`Codex`、`两者`、`暂不安装` 四个选项，并将选择写入 `harness.config.json` 的 `aiTools` 字段
-
-##### 场景：向导步骤 3 - 选择工作流能力
-- **当** 用户进入步骤 3
-- **预期** 系统必须提供 `基础文档`、`功能开发`、`代码审查`、`知识库`、`全部` 五个选项，并将选择写入 `capabilities` 字段
-
-##### 场景：向导步骤 4 - 选择项目类型
-- **当** 用户进入步骤 4
-- **预期** 系统必须自动检测项目类型（Node/Java/混合），并允许用户覆盖；检测结果必须写入 `project.type`
-
-##### 场景：向导步骤 5 - 选择写入策略
-- **当** 用户进入步骤 5
-- **预期** 系统必须提供 `只预览`、`写入项目配置` 两个选项；选择 `只预览` 时等价于 `--dry-run`
-
-##### 场景：向导步骤 6 - 选择 Hook 强度
-- **当** 用户进入步骤 6
-- **预期** 系统必须提供 `不安装`、`仅危险命令阻断`、`完整质量门` 三个选项，并将选择写入 `safety` 配置
-
-##### 场景：向导完成后生成产物
-- **当** 用户完成全部 6 步向导
-- **预期** 系统必须生成 `AGENTS.md`、`CLAUDE.md`（若选择 Claude）、Skill 投影文件，并创建 `.harness/` 工作区目录结构
-
-#### 需求项：已初始化项目操作菜单
-
-系统必须在已初始化项目中执行 `npx @hunterzheng/harness`（无参数）时进入交互式操作菜单。
-
-##### 场景：展示操作菜单
-- **当** 用户在已存在 `.harness/config/harness.config.json` 的项目中无参数执行
-- **预期** 系统必须展示可执行的 Harness 命令列表（inspect/sync/develop/review/knowledge/status/doctor/config），并允许用户选择执行
-
-##### 场景：菜单选择执行命令
-- **当** 用户在操作菜单中选择某个命令
-- **预期** 系统必须路由到对应 capability 执行，并展示执行结果
 
 #### 需求项：命令级 `--json` 格式化输出
 
 系统必须为每个命令提供命令级 `--json` 格式化输出，确保 stdout 为合法 JSON。
 
-##### 场景：inspect JSON 输出
-- **当** 用户执行 `harness inspect --json`
-- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `factsPath`、`moduleMapPath`、`scope`）的 JSON，且 stdout 不得混入非 JSON 文本
+**增量修改**：补充关于 `--help` 与 `--json` 同时出现时的行为。原 spec 未定义此冲突情况。
 
-##### 场景：sync JSON 输出
-- **当** 用户执行 `harness sync --check --json`
-- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `mode`、`drift`、`documents`、`reportPath`）的 JSON
-
-##### 场景：review JSON 输出
-- **当** 用户执行 `harness review --local --no-fix --json`
-- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `scope`、`findings`、`summary`、`reports`）的 JSON
-
-##### 场景：knowledge JSON 输出
-- **当** 用户执行 `harness knowledge --search "关键词" --json`
-- **预期** 系统必须输出包含 `code`、`msg`、`data`（含 `results` 数组，每条含 `sourcePath`、`title`、`kind`、`snippet`、`score`）的 JSON
+##### 场景：`--help` 与 `--json` 同时出现（新增）
+- **当** 用户执行 `node dist/bin/harness.js --help --json`
+- **预期** 系统必须优先输出 JSON（code 0，data.commands 数组），而非 commander 默认帮助文本，确保 stdout 仍为合法 JSON 可用于脚本解析
 
 ### 移除需求
 
@@ -88,91 +57,53 @@
 
 ### 2.1 接口定义
 
-#### 接口基本信息
-- **路径**：`CLI: npx @hunterzheng/harness`（无参数）
-- **方法**：本地进程调用
-- **内容类型**：交互式终端文本
+#### 入口补充契约
 
-#### 请求参数
+在原 `openspec/specs/harness-cli-entrypoint/spec.md` 技术契约基础上新增：
 
-| 参数名 | 类型 | 必填 | 说明 | 示例值 | 约束条件 |
-|-------|------|------|------|--------|----------|
-| (无参数) | - | - | 未初始化→向导；已初始化→菜单 | - | 自动检测 `.harness/config/harness.config.json` |
+| 补充项 | 要求 |
+|-------|------|
+| dist help | `node dist/bin/harness.js --help` 必须输出完整帮助 |
+| --json + --help | 同时出现时优先 JSON 输出，包含 `commands` 数组 |
+| AI CLI 感知 | 交互式入口需通过环境变量（`CLAUDE_CODE_SESSION_ID` 等）检测 AI CLI 类型 |
 
-#### 向导数据结构
-
-```json
-{
-  "wizardAnswers": {
-    "projectPath": "E:/repo/demo",
-    "aiTools": ["claude", "codex"],
-    "capabilities": ["inspect", "sync", "develop", "review", "knowledge"],
-    "projectType": "node",
-    "writeStrategy": "write",
-    "hookStrength": "full"
-  }
-}
-```
-
-#### 错误码定义
+#### 新增错误码定义
 | 错误码 | 含义 | 触发条件 |
 |-------|------|----------|
-| 1003 | 向导中断 | 用户在向导过程中 Ctrl+C |
-| 1004 | 向导输入无效 | 用户输入不在允许选项内 |
-| 2002 | 菜单选择无效 | 操作菜单中选择未注册命令 |
+| 1005 | help 输出失败 | dist 入口 help 渲染异常 |
 
 ---
 
 ## 3. 物理约束
 
-### 3.1 性能约束
-| 指标 | 约束值 | 说明 |
-|------|-------|------|
-| 向导首屏渲染 | < 500 毫秒 (P95) | 单个问题渲染 |
-| 菜单渲染 | < 300 毫秒 (P95) | 命令列表渲染 |
-| 向导完成后产物生成 | < 5000 毫秒 (P95) | 不含用户交互时间 |
-
-### 3.2 资源约束
-| 资源 | 限制 | 说明 |
-|------|------|------|
-| 内存 | < 128 MB | 向导/菜单交互 |
-
-### 3.3 超时配置
-- 用户交互超时：无限制（等待用户输入）
-- 产物生成超时：30000 毫秒
+在原 spec 基础上无新增约束。全局选项解析性能仍要求 < 50 毫秒。
 
 ---
 
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/cli/interactive.ts`：实现 `runInitWizard()` 和 `runOperationMenu()`
-- [ ] `src/cli/global-options.ts`：扩展命令级 `--json` 格式化输出
-- [ ] `src/cli/main.ts`：初始化时调用文档生成和 Skill 投影安装
+- [ ] `src/bin/harness.ts`：入口脚本，确保与 `src/cli/main.ts` 的接口不变
+- [ ] `src/cli/main.ts`：在命令路由前增加 help 请求检测；增加 AI CLI 类型环境变量检测
+- [ ] `src/cli/global-options.ts`：`--help` 和 `--json` 同时出现时改变输出模式
+- [ ] `src/cli/interactive.ts`：向导/菜单增加 AI CLI 上下文提示
+- [ ] `src/cli/output.ts`：增加 JSON 格式的 help 输出路径
 
 ### 4.2 外部依赖
 
 | 组件类型 | 组件名称 | 版本 | 用途 | 降级策略 |
 |---------|---------|------|------|---------|
-| 交互库 | @inquirer/prompts | >= 5.0.0 | 向导问题和菜单选择 | 降级为命令行参数模式 |
+| 框架 | commander | ^12.1.0 | CLI 解析 | 替换为手动 argv 解析 |
+| 运行时 | Node.js | >= 20.0.0 | 进程执行 | 阻断 |
 
 ### 4.3 数据存储
-- [ ] JSON 配置：`.harness/config/harness.config.json`，写入向导选择结果
+无新增。
 
 ---
 
 ## 5. 安全与合规
 
-### 5.1 权限要求
-- 认证方式：本地用户权限
-- 授权范围：向导写入 `.harness/` 和平台投影路径
-
-### 5.2 数据安全
-- 敏感字段：向导过程中不得读取或输出 `.env*`、`*.pem` 等敏感文件
-- 加密要求：无
-
-### 5.3 审计要求
-- 日志记录：向导步骤、用户选择、产物生成路径
+无新增安全约束。
 
 ---
 
@@ -180,16 +111,15 @@
 
 ### 6.1 接口兼容性
 - 是否向后兼容：是
-- 版本控制策略：向导问题顺序和选项必须保持稳定
+- 版本控制策略：新增的 `--help --json` 行为向后兼容；`main()` 签名不变
 
 ### 6.2 数据兼容性
-- 数据迁移方案：无
-- 回滚策略：向导产物生成通过 transaction 回滚
+无新增。
 
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（3 个需求项，13 个场景）
+> - [x] 每个需求项至少有一个场景（2 个新增 + 1 个修改 = 3 个需求项，5 个场景）
 > - [x] 使用「必须」强制要求
 > - [x] 所有接口参数已量化
 > - [x] 物理约束已量化

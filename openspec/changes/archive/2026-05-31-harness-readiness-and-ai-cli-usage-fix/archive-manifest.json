@@ -1,0 +1,60 @@
+{
+  "change": "harness-readiness-and-ai-cli-usage-fix",
+  "archived_at": "2026-05-31T04:12:14.382Z",
+  "reason": "变更已完成实施",
+  "method": "skywalk-full-spec-archive",
+  "source_path": "openspec/changes/harness-readiness-and-ai-cli-usage-fix",
+  "archive_path": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix",
+  "copied_specs": [
+    {
+      "capability": "harness-adapter-skill-runtime",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-adapter-skill-runtime/spec.md",
+      "target": "openspec/specs/harness-adapter-skill-runtime/spec.md"
+    },
+    {
+      "capability": "harness-cli-argument-and-help-fix",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-cli-argument-and-help-fix/spec.md",
+      "target": "openspec/specs/harness-cli-argument-and-help-fix/spec.md"
+    },
+    {
+      "capability": "harness-cli-entrypoint",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-cli-entrypoint/spec.md",
+      "target": "openspec/specs/harness-cli-entrypoint/spec.md"
+    },
+    {
+      "capability": "harness-develop",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-develop/spec.md",
+      "target": "openspec/specs/harness-develop/spec.md"
+    },
+    {
+      "capability": "harness-knowledge",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-knowledge/spec.md",
+      "target": "openspec/specs/harness-knowledge/spec.md"
+    },
+    {
+      "capability": "harness-m1-command-readiness",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-m1-command-readiness/spec.md",
+      "target": "openspec/specs/harness-m1-command-readiness/spec.md"
+    },
+    {
+      "capability": "harness-quality-gates-fix",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-quality-gates-fix/spec.md",
+      "target": "openspec/specs/harness-quality-gates-fix/spec.md"
+    },
+    {
+      "capability": "harness-readme-ai-cli-usage",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-readme-ai-cli-usage/spec.md",
+      "target": "openspec/specs/harness-readme-ai-cli-usage/spec.md"
+    },
+    {
+      "capability": "harness-review",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-review/spec.md",
+      "target": "openspec/specs/harness-review/spec.md"
+    },
+    {
+      "capability": "harness-safety-orchestration",
+      "source": "openspec/changes/archive/2026-05-31-harness-readiness-and-ai-cli-usage-fix/specs/harness-safety-orchestration/spec.md",
+      "target": "openspec/specs/harness-safety-orchestration/spec.md"
+    }
+  ]
+}

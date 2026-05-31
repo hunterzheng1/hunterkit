@@ -1,6 +1,7 @@
 # spec.md - 能力规格定义（增量）
 
-> **定位**：`harness-knowledge` 的实施偏移修复规格
+> **定位**：`harness-knowledge` — 第一版本地索引边界修正，避免 JSON fallback 冒充 SQLite FTS5 完整实现
+> **增量说明**：本文档为对 `openspec/specs/harness-knowledge/spec.md` 的增量修改
 > **【质量红线】严禁描述模糊；约束必须量化
 > **【格式要求】** 需求项使用 `####`（4个#），场景必须使用 `#####`（5个#）
 
@@ -10,7 +11,45 @@
 
 ### 新增需求
 
-无。
+#### 需求项：存储后端明确声明
+
+系统必须在 knowledge 命令输出中明确声明当前使用的存储后端类型，不得让 JSON fallback 行为冒充 SQLite FTS5。
+
+##### 场景：声明存储后端
+- **当** 用户执行 `harness knowledge --index`
+- **预期** 系统必须在响应 `data` 中包含 `storageBackend` 字段：值为 `sqlite-fts5`（SQLite FTS5 可用时）或 `json-fallback`（SQLite 不可用时的降级模式）
+
+##### 场景：JSON fallback 标注
+- **当** 系统使用 JSON fallback 作为存储后端
+- **预期** 必须在 `warnings` 中明确标注："当前使用 JSON 文件存储（降级模式），全文检索精度和性能受限。安装 better-sqlite3 以启用 SQLite FTS5 完整索引"
+
+##### 场景：SQLite FTS5 标注
+- **当** 系统成功使用 SQLite FTS5
+- **预期** `data.storageBackend` 必须为 `sqlite-fts5`，`data.indexPath` 必须指向 `.harness/cache/knowledge.sqlite`
+
+#### 需求项：JSON fallback 写入路径修正
+
+系统必须确保 JSON fallback 的写入路径为 `.harness/cache/knowledge.json`，不得写入 `.harness/cache/knowledge.sqlite` 路径（避免伪装为 SQLite 文件）。
+
+##### 场景：JSON fallback 路径
+- **当** SQLite FTS5 不可用，系统使用 JSON fallback
+- **预期** 索引数据必须写入 `.harness/cache/knowledge.json`（JSON 文件），不得写入 `.harness/cache/knowledge.sqlite` 路径
+
+##### 场景：JSON fallback 搜索行为
+- **当** 使用 JSON fallback 执行 `harness knowledge --search "关键词"`
+- **预期** 系统必须使用 `String.includes` 或等价全文匹配方法搜索；`warnings` 必须包含"JSON fallback 模式下使用简单文本匹配，非 FTS5 全文检索"
+
+#### 需求项：knowledge 命令 M1 完成定义
+
+系统必须明确声明 knowledge 的 M1 完成边界。
+
+##### 场景：M1 已实现功能
+- **当** 用户执行 knowledge 相关命令
+- **预期** M1 阶段已实现：`--index`（文件扫描和索引构建）、`--search`（关键词检索）、`--json`（JSON 输出）、`--dry-run`（预览模式）、增量索引（基于 mtime 和 hash）、Base 参数验证（限制数量/质量检查）
+
+##### 场景：M1 未实现功能
+- **当** M1 阶段尝试使用未实现功能
+- **预期** M1 阶段未实现：SQLite FTS5 深度集成高级功能（BM25 排序优化、片段生成器自定义）；`--limit` 参数的大范围定制（> 50）；多索引源优先级合并排序；跨知识库分布式检索
 
 ### 修改需求
 
@@ -18,69 +57,15 @@
 
 系统必须将 knowledge 命令从 JSON 文件迁移到 SQLite FTS5。
 
-##### 场景：首次索引
-- **当** 用户执行 `harness knowledge --index`
-- **预期** 系统必须扫描 `.harness/develop`、`.harness/docs`、`.harness/rules`、`.harness/reports`、`openspec/changes/**/archive` 等知识来源，并写入 `.harness/cache/knowledge.sqlite`（SQLite FTS5 格式）
+**增量修改**：M1 阶段保留 JSON fallback 作为降级方案，不得强制 SQLite FTS5 作为唯一存储后端。JSON fallback 必须明确标注身份。
 
-##### 场景：SQLite FTS5 不可用
+##### 场景：首次索引（修改）
+- **当** 用户执行 `harness knowledge --index`
+- **预期** 系统必须尝试使用 SQLite FTS5（通过 better-sqlite3），若不可用则使用 JSON fallback；`data.storageBackend` 必须准确反映实际使用的后端
+
+##### 场景：SQLite FTS5 不可用（修改）
 - **当** 本地 SQLite 不支持 FTS5
-- **预期** 系统必须返回错误码 2704 并提示 SQLite FTS 不可用
-
-#### 需求项：`--index` 索引构建/刷新
-
-系统必须实现 `--index` 参数，支持建立或刷新本地知识库。
-
-##### 场景：构建索引
-- **当** 用户执行 `harness knowledge --index`
-- **预期** 系统必须扫描配置允许的知识来源路径，索引 openspec archive、ADR、rules、reports，并写入 `knowledge.sqlite`
-
-##### 场景：增量索引
-- **当** 用户重复执行 `harness knowledge --index`
-- **预期** 系统必须根据文件路径、mtime 和内容 hash 只更新发生变化的文档记录
-
-##### 场景：索引来源无效
-- **当** 配置的知识来源路径越界或不存在
-- **预期** 系统必须返回错误码 2703 并提示索引来源无效
-
-#### 需求项：`--search` 搜索
-
-系统必须实现 `--search` 参数，支持搜索知识库。
-
-##### 场景：关键词检索
-- **当** 用户执行 `harness knowledge --search "文档防腐" --json`
-- **预期** 系统必须返回最多 20 条结果（可通过 `--limit` 调整），每条结果必须包含 `sourcePath`、`title`、`kind`、`snippet`、`score`
-
-##### 场景：无索引检索
-- **当** 用户在知识库不存在时执行 `--search`
-- **预期** 系统必须提示先执行 `harness knowledge --index`，并返回错误码 2702
-
-##### 场景：查询参数无效
-- **当** 用户执行 `harness knowledge --search ""`
-- **预期** 系统必须返回错误码 2701 并提示查询参数为空
-
-#### 需求项：搜索结果带 source path/snippet/score
-
-系统必须在搜索结果中包含 source path、snippet 和 score。
-
-##### 场景：结果结构
-- **当** 搜索返回结果
-- **预期** 每条结果必须包含 `sourcePath`（文件路径）、`title`（文档标题）、`kind`（文档类型：spec/design/tasks/report/rule）、`snippet`（匹配片段，高亮关键词）、`score`（相关度分数，FTS5 rank）
-
-##### 场景：结果排序
-- **当** 搜索返回多条结果
-- **预期** 系统必须按 `score` 降序排列，最高相关度在前
-
-#### 需求项：增量索引
-
-系统必须支持增量索引，只更新变化的文档。
-
-##### 场景：增量更新
-- **当** 用户重复执行 `harness knowledge --index`
-- **预期** 系统必须根据文件路径、mtime 和内容 hash 判断变化，只更新变化的文档记录，未变化的文档必须跳过
-
-##### 场景：删除文档处理
-- **当** 已索引文档被删除
-- **预期** 系统必须在下次索引时从 `knowledge.sqlite` 中删除对应记录
+- **预期** 系统必须降级为 JSON fallback，非返回错误码 2704；必须在 `warnings` 中标注降级信息；返回 code 0（非致命错误）
 
 ### 移除需求
 
@@ -90,129 +75,52 @@
 
 ## 2. 技术契约（SDD 扩展）
 
-### 2.1 接口定义
+### 2.1 存储后端选择逻辑
 
-#### 接口基本信息
-- **路径**：`CLI: harness knowledge`
-- **方法**：本地进程调用
-- **内容类型**：终端文本；`--json` 时为 `application/json`
+```
+try:
+  better-sqlite3 available → SQLite FTS5 → storageBackend = "sqlite-fts5"
+catch:
+  JSON file → storageBackend = "json-fallback" + warning
+```
 
-#### 请求参数
+### 2.2 响应结构补充字段
 
-| 参数名 | 类型 | 必填 | 说明 | 示例值 | 约束条件 |
-|-------|------|------|------|--------|----------|
-| --index | boolean | 否 | 建立或刷新索引 | `true` | 与 `--search` 至少传一个 |
-| --search | string | 否 | 检索查询 | `文档防腐` | 长度 1-200；与 `--index` 可同时使用，先索引后检索 |
-| --json | boolean | 否 | JSON 输出 | `true` | stdout 必须是合法 JSON |
-| --limit | number | 否 | 结果数量 | `20` | 范围 1-50；默认 20 |
-| --dry-run | boolean | 否 | 预览索引来源 | `true` | 为 `true` 时不得写 knowledge.sqlite |
-
-#### 响应结构
-
-**成功响应 (0)**
 ```json
 {
   "code": 0,
   "msg": "success",
   "data": {
-    "indexPath": ".harness/cache/knowledge.sqlite",
+    "storageBackend": "sqlite-fts5 | json-fallback",
+    "indexPath": ".harness/cache/knowledge.sqlite | .harness/cache/knowledge.json",
     "indexedFiles": 42,
-    "results": [
-      {
-        "sourcePath": ".harness/develop/archive/demo/spec.md",
-        "title": "文档防腐",
-        "kind": "spec",
-        "snippet": "同步必须保护 managed block...",
-        "score": 12.4
-      }
-    ]
-  }
+    "results": [...]
+  },
+  "warnings": [
+    "JSON fallback 模式下使用简单文本匹配，非 FTS5 全文检索"
+  ]
 }
 ```
-
-#### 错误码定义
-| 错误码 | 含义 | 触发条件 |
-|-------|------|----------|
-| 2701 | 查询参数无效 | `--search` 为空或超过 200 字符 |
-| 2702 | 索引不存在 | 未建立 knowledge.sqlite 且执行搜索 |
-| 2703 | 索引来源无效 | 配置的知识来源路径越界或不存在 |
-| 2704 | SQLite FTS 不可用 | 本地 SQLite 不支持 FTS5 |
-| 5701 | 索引写入失败 | knowledge.sqlite 写入失败 |
 
 ---
 
 ## 3. 物理约束
 
-### 3.1 性能约束
-| 指标 | 约束值 | 说明 |
-|------|-------|------|
-| 首次索引时间 | < 60000 毫秒 (P95) | 文档数 < 5000 |
-| 增量索引时间 | < 10000 毫秒 (P95) | 变更文档数 < 200 |
-| 搜索响应时间 | < 1000 毫秒 (P95) | 索引文档数 < 50000 |
-
-### 3.2 资源约束
-| 资源 | 限制 | 说明 |
-|------|------|------|
-| 内存 | < 512 MB | 索引文档总量 < 500 MB |
-| CPU | 平均 < 85% | 索引期间 |
-| 存储 | < 1 GB | `.harness/cache/knowledge.sqlite` 上限 |
-
-### 3.3 超时配置
-- 总超时：300000 毫秒
+在原 spec 基础上无变更。JSON fallback 搜索性能可适当放宽至 < 5000 毫秒。
 
 ---
 
 ## 4. 影响模块
 
 ### 4.1 内部依赖
-- [ ] `src/capabilities/knowledge/command.ts`：迁移到 SQLite FTS5、实现 `--index` 索引构建/刷新、实现 `--search`
-- [ ] `src/core/legacy-sources.ts`：兼容读取旧目录（`openspec/changes/**/archive`、`.kld-review/`、`.docsync/`）作为只读索引来源
-
-### 4.2 外部依赖
-
-| 组件类型 | 组件名称 | 版本 | 用途 | 降级策略 |
-|---------|---------|------|------|---------|
-| 运行时 | Node.js | >= 20.0.0 | CLI 和文件扫描 | 阻断 knowledge |
-| 数据库 | SQLite | >= 3.35.0 | FTS5 本地索引 | 返回 FTS 不可用错误 |
-| 搜索扩展 | SQLite FTS5 | >= 3.35.0 | 全文检索 | 降级为文件名和标题搜索 |
-| 文档格式 | CommonMark Markdown | 0.30 | Markdown 文档切片 | 纯文本切片 |
-
-### 4.3 数据存储
-- [ ] SQLite 数据库（SQLite >= 3.35.0）：`.harness/cache/knowledge.sqlite`，FTS5 索引和文档元数据
-- [ ] JSON 配置：`.harness/config/knowledge.config.json`，索引来源和忽略规则
-
----
-
-## 5. 安全与合规
-
-### 5.1 权限要求
-- 认证方式：本地文件系统权限
-- 授权范围：只读取配置允许的知识来源路径，默认不读取 secretPatterns 命中文件
-
-### 5.2 数据安全
-- 敏感字段：knowledge.sqlite 不加密；因此必须禁止索引敏感文件内容
-
-### 5.3 审计要求
-- 日志记录：索引来源、文件数量、跳过数量、数据库路径、搜索查询长度
-
----
-
-## 6. 兼容性
-
-### 6.1 接口兼容性
-- 是否向后兼容：是
-- 版本控制策略：knowledge.sqlite 必须包含 schemaVersion；不兼容 schema 必须触发重建或迁移提示
-
-### 6.2 数据兼容性
-- 数据迁移方案：旧 openspec archive、`.kld-review/` 报告、`.docsync/` 规则可作为只读索引来源
-- 回滚策略：索引失败必须保留上一个可用 knowledge.sqlite，临时数据库写入完成后再原子替换
+- [ ] `src/capabilities/knowledge/command.ts`：增加 `storageBackend` 声明；JSON fallback 写入 `.json` 路径而非 `.sqlite`；降级模式下 warning 标注；SQLite 不可用时降级为 JSON 而非返回 2704 错误
+- [ ] `src/capabilities/knowledge/types.ts`：KnowledgeResult 增加 `storageBackend` 字段
 
 ---
 
 > **质量红线检查清单**
-> - [x] 每个需求项至少有一个场景（5 个需求项，11 个场景）
+> - [x] 每个需求项至少有一个场景（3 新增 + 1 修改 = 4 个需求项，9 个场景）
 > - [x] 使用「必须」强制要求
 > - [x] 所有接口参数已量化
-> - [x] 物理约束已量化
 > - [x] 错误码已定义
 > - [x] 技术选型已包含版本信息
