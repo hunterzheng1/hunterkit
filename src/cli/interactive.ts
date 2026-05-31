@@ -77,28 +77,23 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
       ? await select({ message: '请输入项目路径', choices: [{ name: context.globalOptions.cwd, value: context.globalOptions.cwd }] })
       : projectPath;
 
-    // 步骤 2：选择 AI 工具
-    const aiTools = await checkbox({
-      message: '选择 AI 工具（空格选中，Enter 确认）',
-      choices: [
-        { name: 'Claude Code', value: 'claude' },
-        { name: 'Codex (OpenAI)', value: 'codex' },
-      ],
-    }) as string[];
+    // 步骤 2：选择 AI 工具（空选时循环重试，必须至少选一个）
+    let aiTools: string[] = [];
+    while (aiTools.length === 0) {
+      aiTools = await checkbox({
+        message: '选择 AI 工具（空格选中，Enter 确认，至少选择一个）',
+        choices: [
+          { name: 'Claude Code', value: 'claude' },
+          { name: 'Codex (OpenAI)', value: 'codex' },
+        ],
+      }) as string[];
 
-    // 空选阻断：返回错误码 1010，不再默认 Claude
-    if (aiTools.length === 0) {
-      return {
-        code: 1010,
-        msg: 'No AI tool selected',
-        data: {
-          command: 'init',
-          mode: 'wizard',
-          suggestion: '请选择至少一个 AI 工具',
-          aiCliContext,
-        },
-        warnings: [],
-      };
+      if (aiTools.length === 0) {
+        // 空选提示，但不退出向导，循环重试
+        if (!context.globalOptions.json) {
+          context.io.stdout.write('\x1b[33m⚠ 请至少选择一个 AI 工具（空格选中，Enter 确认）\x1b[0m\n');
+        }
+      }
     }
 
     // 步骤 3：选择工作流能力

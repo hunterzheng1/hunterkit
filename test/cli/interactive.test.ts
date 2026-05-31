@@ -116,16 +116,25 @@ describe('runInitWizard', () => {
     expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
   });
 
-  it('should return error 1010 when no AI tools selected', async () => {
+  it('should loop until at least one AI tool is selected', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce([]);  // no selection
+    // 第一次空选 → 循环重试
+    mockCheckbox.mockResolvedValueOnce([]);
+    // 第二次选择 Claude → 继续向导
+    mockCheckbox.mockResolvedValueOnce(['claude']);
+    mockCheckbox.mockResolvedValueOnce([]);    // capabilities
+    mockSelect.mockResolvedValueOnce('auto');  // projectType
+    mockSelect.mockResolvedValueOnce('write'); // writeStrategy
+    mockSelect.mockResolvedValueOnce('full');  // hookStrength
 
     const context = createMockContext();
     const response = await runInitWizard(context);
 
-    expect(response.code).toBe(1010);
-    expect(response.msg).toBe('No AI tool selected');
-    expect(response.data.suggestion).toBe('请选择至少一个 AI 工具');
+    // 循环后成功完成向导
+    expect(response.code).toBe(0);
+    expect(response.msg).toBe('success');
+    const answers = response.data.wizardAnswers;
+    expect(answers.aiTools).toEqual(['claude']);
   });
 
   it('should handle step 3 with "all" capabilities', async () => {
