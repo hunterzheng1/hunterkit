@@ -12,28 +12,37 @@ const SHARED_SKILL_TEMPLATE = `# Harness Skill
 > Source of truth: \`.harness/adapters/\`
 > Repair: \`harness config --repair-adapters\`
 
-## Usage
+## Command Mapping
 
-When the user asks to run harness commands, use:
-\`\`\`bash
-harness <command> [options]
-\`\`\`
+Map user intent to CLI commands, execute, and display a brief result summary.
 
-Available commands: inspect, sync, develop, review, knowledge, status, doctor, config
+| 用户意图 / 自然语言 | CLI 命令 | 操作 |
+|-------------------|---------|------|
+| 扫描项目结构 / 了解项目 / inspect | \`harness inspect\` | Read-only scan, show facts summary |
+| 同步文档 / 更新 AGENTS / sync | \`harness sync\` | Sync docs, show drift report |
+| 功能开发 / 规格驱动流程 | \`harness develop <change>\` | Run dev workflow stage |
+| 代码审查 / review / 检查代码 | \`harness review --local\` | Run review, show findings summary |
+| 搜索知识库 / 查找历史设计 | \`harness knowledge --search "query"\` | Search project knowledge |
+| 查看项目状态 | \`harness status\` | Show workspace + capabilities |
+| 诊断环境 | \`harness doctor\` | Check deps + config + hooks |
+| 管理配置 | \`harness config\` | View/edit harness config |
+
+## Output
+
+- For human-readable output, display the CLI result summary.
+- For JSON output, add \`--json\` flag.
+- For preview without file writes, add \`--dry-run\` flag.
+- Always report the exit code (0 = success, non-zero = issue found).
 `;
 
 /** Codex agent metadata template */
 const CODEX_AGENT_TEMPLATE = `interface:
   display_name: Harness
-  short_description: AI-assisted development workflow tool
-  default_prompt: You are a helpful AI assistant for the Harness CLI tool.
+  short_description: Unified local CLI for inspect, sync, develop, review, and knowledge workflows
+  default_prompt: Use Harness to run the requested project workflow.
 
 policy:
   allow_implicit_invocation: false
-
-tools:
-  - name: harness
-    description: Run harness CLI commands
 `;
 
 /** Copilot instructions template */
