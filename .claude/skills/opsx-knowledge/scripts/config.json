@@ -1,0 +1,39 @@
+{
+  "baseUrl": "http://10.29.219.26:9380",
+  "apiKey": "ragflow-6xxy9RUUtRiE9N6gzpTLfQbY00tnGGKWsEuBR53zp0U",
+  "timeoutMs": 8000,
+  "modules": {
+    "mm": {
+      "datasetId": "12eda67a4ffb11f19cb713ede57b176f",
+      "label": "MM模块",
+      "keywords": [
+        "MM",
+        "物料",
+        "库存",
+        "采购",
+        "MRP",
+        "BOM",
+        "仓库",
+        "入库",
+        "出库",
+        "批次",
+        "Material"
+      ]
+    },
+    "co": {
+      "datasetId": "02841d1e4ffb11f19cb713ede57b176f",
+      "label": "CO模块",
+      "keywords": [
+        "CO",
+        "成本",
+        "费用",
+        "预算",
+        "核算",
+        "CO-PA",
+        "利润中心",
+        "成本中心",
+        "Controlling"
+      ]
+    }
+  }
+}

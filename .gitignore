@@ -14,7 +14,10 @@ skywalk-sdd/state/
 
 # 忽略的目录
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/commands/
+.claude/commands/personal-*
 .codex/
 .docsync/
 .kunlunzhima/
