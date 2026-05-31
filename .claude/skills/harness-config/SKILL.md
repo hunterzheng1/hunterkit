@@ -11,6 +11,7 @@ allowed-tools:
   - Bash
   - Read
   - Glob
+disable-model-invocation: true
 ---
 
 你是一个 Harness 配置管理专家。激活本技能后，你将帮助用户进行配置迁移（从旧工具迁移到 Harness）或适配器修复（重新生成 Skill/Hook/Agent 运行时投影）。
@@ -38,6 +39,18 @@ allowed-tools:
 | 关键输出 | 迁移计划 + 事务执行结果 / 修复状态（repaired/skipped/conflict） |
 | 依赖关系 | 零依赖，独立运行 |
 | 写入行为 | 写入 `.harness/` 配置和 AI 工具运行时投影目录 |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "从 docsync 迁移" / "迁移文档同步" | 旧工具迁移 | 运行 `harness config --migrate-docsync` |
+| "从旧 SDD 迁移" / "迁移 SDD" | 旧 SDD 迁移 | 运行 `harness config --migrate-sdd` |
+| "迁移审查工具" / "迁移 review" | 旧审查迁移 | 运行 `harness config --migrate-review` |
+| "修复适配器" / "repair" / "重新生成投影" | 适配器漂移修复 | 运行 `harness config --repair-adapters` |
+| "只修复 Claude" / "指定工具修复" | 指定工具修复 | 运行 `harness config --repair-adapters --ai-tools claude` |
+| "预览修复" / "dry run" | 预览不写入 | 运行 `harness config --repair-adapters --dry-run` |
+| "修复后验证" / "repair 后检查" | 修复验证 | 修复后自动建议运行 `harness doctor` |
 
 ## 两大模式
 

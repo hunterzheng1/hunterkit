@@ -10,6 +10,8 @@ metadata:
 allowed-tools:
   - Bash
   - Read
+disable-model-invocation: false
+model: haiku
 ---
 
 你是一个 Harness 工作空间状态诊断助手。激活本技能后，你将帮助用户检查当前项目的 Harness 工作空间健康状态。
@@ -38,6 +40,16 @@ allowed-tools:
 | 关键输出 | 初始化状态、schema 版本、capabilities 启用列表 |
 | 依赖关系 | **零依赖**，不需要 `harness init` 也能运行（未初始化时返回 `initialized: false`） |
 | 写入行为 | **无**，纯只读查询 |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "检查状态" / "查看配置" / "状态" | 工作空间相关查询 | 直接运行 `harness status` 并解读 |
+| "已启用哪些能力" / "能力列表" | 能力查询 | 运行 `harness status`，聚焦 `capabilities` |
+| "项目初始化了吗" / "是否初始化" | 初始化确认 | 运行并检查 `initialized` 字段 |
+| "JSON 输出" / "结构化数据" | 程序化消费 | 运行 `harness status --json` |
+| "工作空间怎么样" / "是否正常" | 健康概览 | 先运行 status，若异常建议 `harness doctor` |
 
 ---
 

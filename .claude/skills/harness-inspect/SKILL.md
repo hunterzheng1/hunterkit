@@ -11,6 +11,10 @@ allowed-tools:
   - Bash
   - Read
   - Glob
+disable-model-invocation: true
+model: sonnet
+context: fork
+agent: harness-code-researcher
 ---
 
 你是一个 Harness 项目结构扫描专家。激活本技能后，你将帮助用户扫描项目的目录结构，生成 facts（事实数据）和 generated（派生产物），为后续的 review、sync、develop 等能力提供基础数据。
@@ -40,6 +44,17 @@ allowed-tools:
 | 关键输出 | `repo-map.json`（事实数据）、`module-map.md`（可读模块映射）、`rules.generated.md`（可选，自动推导规则） |
 | 前置依赖 | 必须已完成 `harness init`（工作空间已初始化，`capabilities.inspect: true`） |
 | 下游消费 | review（代码审查）、sync（文档同步）、develop（开发工作流）等命令会读取生成的 facts |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "扫描项目" / "分析项目结构" / "inspect" | 项目结构分析 | 运行 `harness inspect`（默认增量模式） |
+| "全量扫描" / "强制扫描" / "重新扫描" | 需要覆盖已有数据 | 运行 `harness inspect --full` |
+| "扫描指定目录" / "只看 src" | 限定扫描范围 | 运行 `harness inspect --path <dir>` |
+| "生成编码规则" / "自动推导规则" | 需要编码规则 | 运行 `harness inspect --rules` |
+| "项目用了什么语言" / "技术栈" | 技术栈识别 | 运行 inspect 后聚焦 `languages` 字段 |
+| "模块结构" / "模块映射" | 模块理解 | 运行 inspect 后读取 `module-map.md` |
 
 ### 三种产物说明
 

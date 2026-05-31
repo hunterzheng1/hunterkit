@@ -13,6 +13,10 @@ allowed-tools:
   - Read
   - Glob
   - Grep
+disable-model-invocation: false
+model: sonnet
+context: fork
+agent: harness-code-reviewer
 ---
 
 你是一个 Harness 代码审查专家。激活本技能后，你将使用 6 个 Reviewer 对指定范围的代码进行启发式扫描，并生成双格式审查报告。
@@ -43,6 +47,19 @@ allowed-tools:
 | 关键输出 | Markdown 报告 + JSON 报告（双格式） |
 | 依赖关系 | **独立运行**，不依赖 inspect/sync 等其他命令 |
 | 写入行为 | 仅写入 `.harness/reports/review/` 目录，除非使用 `--fix` |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "审查代码" / "review" / "代码检查" | 代码审查请求 | 确认范围（local/staged/scan）后运行 `harness review` |
+| "快速检查" / "lite" | 快速审查 | 运行 `harness review --lite`（仅 2 个 reviewer） |
+| "深度审查" / "全面审查" / "full" | 深度审查 | 运行 `harness review --full`（全部 6 个 reviewer） |
+| "审查本地变更" / "审查我的改动" | 本地分支审查 | 运行 `harness review --local --full` |
+| "审查暂存区" / "审查即将提交的" | 暂存区审查 | 运行 `harness review --staged` |
+| "审查指定目录" / "扫描 src" | 指定目录审查 | 运行 `harness review --scan <path>` |
+| "自动修复" / "fix" | 自动修复 P2 | 运行 `harness review --fix`（仅修复 P2 级别） |
+| "预览审查" / "dry run" | 预览不写入 | 运行 `harness review --dry-run` |
 
 ### M1 阶段能力范围
 
@@ -196,6 +213,18 @@ harness review --dry-run
 - 仅修复 P2 级别（建议）的问题
 - P0 和 P1 级别问题**不会自动修复**，必须人工处理
 - 修复操作通过 Harness 事务机制执行，支持 `--dry-run` 预览
+
+---
+
+## Supporting Files
+
+本技能使用渐进披露设计，复杂规则拆分到独立文件中：
+
+| 文件 | 读取时机 | 内容 |
+|------|---------|------|
+| `reference.md` | 需要了解 6 个 Reviewer 的具体检测正则、置信度计算和输出格式时 | 6 个 Reviewer 完整规范 |
+
+> **规则**：默认情况下仅读取 `SKILL.md`。只有当用户询问"某个 Reviewer 检测什么"、"置信度怎么算"、"为什么这个文件被标记为 P0"等具体问题时，才读取 `reference.md`。
 
 ---
 

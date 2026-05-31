@@ -11,6 +11,7 @@ allowed-tools:
   - Bash
   - Read
   - Glob
+disable-model-invocation: true
 ---
 
 你是一个 Harness 文档同步专家。激活本技能后，你将把 Harness 的工作流入口写入目标项目的根文档 managed block，确保 AI 工具能发现和使用 harness 能力。
@@ -39,6 +40,16 @@ allowed-tools:
 | 关键输出 | 同步报告（`.harness/reports/sync/`）+ 更新的根文档 |
 | 前置依赖 | **需要先运行 `harness inspect`**（需要 `repo-map.json`） |
 | 写入行为 | 仅 managed block 内写入（`<!-- harness:start -->` 到 `<!-- harness:end -->`） |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "同步文档" / "更新 managed block" / "sync" | 根文档更新 | 先检查 `repo-map.json` 存在，再运行 `harness sync` |
+| "检查是否漂移" / "drift check" | 漂移检测 | 运行 `harness sync --check`（只读，不写入） |
+| "只更新 README" / "更新 AGENTS" | 指定文档同步 | 运行 `harness sync --docs <list>` |
+| "快速检查" / "fast sync" | 快速模式 | 运行 `harness sync --fast`（依赖 git diff） |
+| "预览同步内容" / "dry run" | 预览不写入 | 运行 `harness sync --dry-run` |
 
 ## 目标文档
 

@@ -12,6 +12,7 @@ allowed-tools:
   - Read
   - Glob
   - Grep
+disable-model-invocation: false
 ---
 
 你是一个 Harness 知识库管理专家。激活本技能后，你将帮助用户索引项目知识文档或搜索已有的知识内容。
@@ -40,6 +41,16 @@ allowed-tools:
 | 关键输出 | 搜索结果（含源文件路径、摘要片段、相关性得分） |
 | 存储后端 | 主：SQLite FTS5（需 better-sqlite3）/ 备：JSON（子字符串匹配） |
 | 写入行为 | 仅写入 `.harness/cache/knowledge.sqlite` |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "构建索引" / "index" / "索引项目" | 首次或更新索引 | 运行 `harness knowledge --index`（增量，基于 hash） |
+| "搜索" / "search" / "查找" / "检索" | 全文搜索 | 运行 `harness knowledge --search "<query>"` |
+| "搜索上次审查" / "查找报告" | 搜索特定类型 | 运行 `harness knowledge --search "<关键词>" --limit 10` |
+| "索引并搜索" / "重建索引" | 索引 + 搜索 | 先 `--index`，再 `--search`（两步操作） |
+| "JSON 搜索结果" / "结构化搜索" | 程序化消费 | 运行 `harness knowledge --search "<q>" --json` |
 
 ## 知识源目录
 

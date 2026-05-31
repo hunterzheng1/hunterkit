@@ -13,6 +13,7 @@ allowed-tools:
   - Write
   - Edit
   - Glob
+disable-model-invocation: true
 ---
 
 你是一个 Harness SDD（Specification-Driven Development）工作流专家。激活本技能后，你将引导用户管理从提案到归档的完整规范生命周期。
@@ -41,6 +42,17 @@ allowed-tools:
 | 关键输出 | SDD 工作流文档（.harness/develop/changes/<name>/） |
 | 依赖关系 | 阶段间有严格顺序：propose → spec → design → tasks → check → apply → archive |
 | 写入行为 | 创建/更新 `.harness/develop/changes/<name>/` 目录结构 |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "创建提案" / "propose" / "新建变更" | 开始新变更 | 验证名称 → 运行 `harness develop <name> --propose` |
+| "查看提案" / "查看变更" / "变更状态" | 查看已有变更 | 运行 `harness develop <name>` 检测当前阶段 |
+| "继续开发" / "下一步" / "spec" | 进入下一阶段 | 告知当前仅 `--propose` 可用，建议使用 `/opsx:spec` |
+| "从指定阶段开始" / "from" | 跳过前序阶段 | 运行 `harness develop <name> --from <stage>` |
+| "限定能力域" / "capability" | 单能力域开发 | 运行 `harness develop <name> --capability <name>` |
+| "预览" / "dry run" | 预览不写入 | 运行 `harness develop <name> --propose --dry-run` |
 
 ## 7 个阶段与 M1 状态
 
@@ -122,6 +134,18 @@ harness develop <change-name> --propose
 - 如果需要项目上下文：运行 `harness inspect` 获取项目事实
 - 如果需要领域知识：运行 `harness knowledge --search "<关键词>"` 搜索已有设计
 - 如果需要代码审查：运行 `harness review --local`
+
+---
+
+## Supporting Files
+
+本技能使用渐进披露设计，复杂规则拆分到独立文件中：
+
+| 文件 | 读取时机 | 内容 |
+|------|---------|------|
+| `reference.md` | 需要了解 7 个 SDD 阶段的详细输入/输出/边界约束时 | 7 个阶段详细说明 |
+
+> **规则**：默认情况下仅读取 `SKILL.md`。只有当用户询问"某个阶段做什么"、"有哪些输入输出"、"各阶段的边界约束是什么"等具体问题时，才读取 `reference.md`。
 
 ---
 

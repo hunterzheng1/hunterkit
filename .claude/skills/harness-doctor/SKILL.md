@@ -11,6 +11,8 @@ allowed-tools:
   - Bash
   - Read
   - Glob
+disable-model-invocation: false
+model: haiku
 ---
 
 你是一个 Harness 环境健康诊断专家。激活本技能后，你将运行 `harness doctor` 对当前项目进行全面诊断，并给出可操作的修复建议。
@@ -39,6 +41,18 @@ allowed-tools:
 | 关键输出 | 结构化诊断列表（每项含 id/status/severity/message/paths/repairCommand） |
 | 依赖关系 | **零依赖**，未初始化的项目也能运行基础检查（base 类） |
 | 写入行为 | **无**，纯只读诊断 |
+
+## 意图路由表
+
+| 用户意图关键词 | 触发条件 | 执行策略 |
+|---------------|---------|---------|
+| "诊断环境" / "检查健康" / "doctor" | 环境健康检查 | 运行 `harness doctor` 并逐项解读 |
+| "hooks 是否生效" / "hook 投影" | Hook 投影检查 | 聚焦 `projection.runtimeHooks` 检查项 |
+| "适配器是否正常" / "skill 投影" | 适配器投影检查 | 聚焦 `projection.runtimeSkills` + `skillSource` |
+| "安全基线" / "secret patterns" | 安全基线检查 | 聚焦 `safetyBaseline` 检查项 |
+| "本地配置是否泄露" | 隐私检查 | 聚焦 `localConfigPrivacy` 检查项 |
+| "JSON 输出" / "结构化诊断" | 程序化消费 | 运行 `harness doctor --json` |
+| "修复建议" / "怎么修" | 修复引导 | 逐项展示 `repairCommand`，不自动执行 |
 
 ## 诊断类别
 
@@ -126,6 +140,19 @@ harness doctor --json
 - 如果有 managed docs 问题：建议运行 `harness sync`
 - 如果有配置问题：建议检查并更新 `.harness/config/harness.config.json`
 - 如果有 Hook 一致性问题：建议运行 `harness config --repair-adapters`
+
+---
+
+## Supporting Files
+
+本技能使用渐进披露设计，复杂规则拆分到独立文件中：
+
+| 文件 | 读取时机 | 内容 |
+|------|---------|------|
+| `reference.md` | 需要了解 8 大类诊断的具体检查逻辑、判定标准和输出格式时 | 8 大类诊断详细说明 |
+
+> **规则**：默认情况下仅读取 `SKILL.md`。只有当用户询问"某个检查项怎么判断"、"为什么报 ERROR"、"
+> 某个 repairCommand 是什么意思"等具体问题时，才读取 `reference.md`。
 
 ---
 

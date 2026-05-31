@@ -17,6 +17,7 @@ skywalk-sdd/state/
 .claude/*
 !.claude/skills/
 !.claude/commands/
+!.claude/agents/
 .claude/commands/personal-*
 .codex/
 .docsync/
