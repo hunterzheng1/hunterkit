@@ -26,7 +26,7 @@ import { ensureAdapterSources } from '../adapters/source-manager.js';
 import { applyProjectionWrites } from '../adapters/projection-writer.js';
 import { beginTransaction, commitTransaction } from '../core/transaction.js';
 import { writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 
 /**
  * Register all real command handlers, replacing stubs
@@ -50,18 +50,25 @@ function registerAllHandlers(registry: CommandRegistry): void {
 /**
  * 从向导答案构建 HarnessConfig
  */
-function buildConfigFromAnswers(answers: WizardAnswers): HarnessConfig {
+function buildConfigFromAnswers(answers: WizardAnswers, cwd: string): HarnessConfig {
+  const projectName = basename(answers.projectPath) || 'project';
+
+  // 自动检测项目类型
+  const detectedType = answers.projectType === 'auto'
+    ? detectProjectType(cwd)
+    : answers.projectType;
+
   return {
     schemaVersion: 1,
     project: {
-      name: answers.projectPath.split('/').pop() || 'project',
-      type: answers.projectType,
+      name: projectName,
+      type: detectedType,
     },
     aiTools: {
       claude: answers.aiTools.includes('claude'),
       codex: answers.aiTools.includes('codex'),
-      copilot: false,
-      cursor: false,
+      copilot: answers.aiTools.includes('copilot'),
+      cursor: answers.aiTools.includes('cursor'),
     },
     capabilities: {
       inspect: answers.capabilities.includes('inspect'),
@@ -87,6 +94,18 @@ function buildConfigFromAnswers(answers: WizardAnswers): HarnessConfig {
 }
 
 /**
+ * 自动检测项目类型
+ */
+function detectProjectType(cwd: string): string {
+  if (existsSync(join(cwd, 'package.json'))) return 'node';
+  if (existsSync(join(cwd, 'pom.xml')) || existsSync(join(cwd, 'build.gradle'))) return 'java';
+  if (existsSync(join(cwd, 'pyproject.toml')) || existsSync(join(cwd, 'setup.py'))) return 'python';
+  if (existsSync(join(cwd, 'go.mod'))) return 'go';
+  if (existsSync(join(cwd, 'Cargo.toml'))) return 'rust';
+  return 'generic';
+}
+
+/**
  * 向导完成后执行工作区创建和产物生成
  */
 function executePostWizardIntegration(
@@ -104,7 +123,7 @@ function executePostWizardIntegration(
 
   try {
     // 1. 创建工作区目录结构
-    const config = buildConfigFromAnswers(answers);
+    const config = buildConfigFromAnswers(answers, cwd);
     const workspaceResult = ensureWorkspace(
       { cwd, dryRun: isDryRun, json: false },
       config,

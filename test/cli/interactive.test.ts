@@ -116,9 +116,9 @@ describe('runInitWizard', () => {
     expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
   });
 
-  it('should handle step 2 with "skip" (no AI tools)', async () => {
+  it('should handle step 2 with "skip" (no AI tools) → defaults to claude', async () => {
     mockSelect.mockResolvedValueOnce(process.cwd());
-    mockCheckbox.mockResolvedValueOnce([]);
+    mockCheckbox.mockResolvedValueOnce([]);  // no selection
     mockCheckbox.mockResolvedValueOnce(['inspect']);
     mockSelect.mockResolvedValueOnce('node');
     mockSelect.mockResolvedValueOnce('write');
@@ -127,7 +127,7 @@ describe('runInitWizard', () => {
     const context = createMockContext();
     const response = await runInitWizard(context);
 
-    expect(response.data.wizardAnswers.aiTools).toEqual([]);
+    expect(response.data.wizardAnswers.aiTools).toEqual(['claude']);
   });
 
   it('should handle step 3 with "all" capabilities', async () => {

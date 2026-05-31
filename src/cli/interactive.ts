@@ -72,13 +72,18 @@ export async function runInitWizard(context: CommandContext): Promise<CliRespons
       : projectPath;
 
     // 步骤 2：选择 AI 工具
-    const aiTools = await checkbox({
-      message: '选择 AI 工具',
+    let aiTools = await checkbox({
+      message: '选择 AI 工具（空格选中，Enter 确认）',
       choices: [
         { name: 'Claude Code', value: 'claude' },
         { name: 'Codex (OpenAI)', value: 'codex' },
       ],
-    });
+    }) as string[];
+
+    // 防止空选（用户直接 Enter 跳过）
+    if (aiTools.length === 0) {
+      aiTools = ['claude'];
+    }
 
     // 步骤 3：选择工作流能力
     const capabilities = await checkbox({
