@@ -119,64 +119,24 @@ allowed-tools: Bash, Read, Glob
 };
 
 // ============================================================
-// Claude Slash Command frontmatter（按 skillName）
+// Claude Agent frontmatter
 // ============================================================
 
-const CLAUDE_COMMAND_FRONTMATTER: Record<string, string> = {
-  'harness-status': `---
-name: "Harness: Status"
-description: "查询工作空间状态 — 查看初始化状态和已启用能力"
-argument-hint: "[--json]"
-skill: harness-status
+const CLAUDE_AGENT_FRONTMATTER: Record<string, string> = {
+  'harness-code-reviewer': `---
+name: harness-code-reviewer
+description: "Harness 代码审查专用 Subagent — 运行 6 个 Reviewer 启发式扫描源代码，隔离上下文避免污染主会话"
+tools: Read, Glob, Grep, Bash
+model: sonnet
+permissionMode: plan
 ---`,
 
-  'harness-doctor': `---
-name: "Harness: Doctor"
-description: "诊断环境健康 — 8 大类检查覆盖 Node.js、工作空间、Hook 投影、Skill 源合规、安全基线"
-argument-hint: "[--json]"
-skill: harness-doctor
----`,
-
-  'harness-inspect': `---
-name: "Harness: Inspect"
-description: "扫描项目结构 — 生成 repo-map.json、module-map.md 和自动推导规则"
-argument-hint: "[--full] [--path <dir>] [--rules]"
-skill: harness-inspect
----`,
-
-  'harness-sync': `---
-name: "Harness: Sync"
-description: "同步根文档 managed block — 将 Harness 工作流入口写入 README/AGENTS/CLAUDE"
-argument-hint: "[--check] [--fast] [--docs <list>] [--dry-run]"
-skill: harness-sync
----`,
-
-  'harness-review': `---
-name: "Harness: Review"
-description: "启发式代码审查 — 6 个 reviewer 扫描代码查找安全漏洞、TODO、硬编码密钥等问题"
-argument-hint: "[--local|--staged|--scan <path>] [--lite|--full] [--fix] [--dry-run] [--json]"
-skill: harness-review
----`,
-
-  'harness-develop': `---
-name: "Harness: Develop"
-description: "SDD 工作流 — 创建新变更提案（M1 阶段仅 --propose 可用）"
-argument-hint: "<change-name> [--propose] [--from <stage>] [--capability <name>]"
-skill: harness-develop
----`,
-
-  'harness-knowledge': `---
-name: "Harness: Knowledge"
-description: "知识库搜索 — 索引项目文档并全文搜索历史设计、规则和报告"
-argument-hint: "[--index] [--search <query>] [--limit N]"
-skill: harness-knowledge
----`,
-
-  'harness-config': `---
-name: "Harness: Config"
-description: "配置管理 — 从旧工具迁移或重新生成 AI 工具适配器投影"
-argument-hint: "[--migrate-*] [--repair-adapters] [--ai-tools <list>]"
-skill: harness-config
+  'harness-code-researcher': `---
+name: harness-code-researcher
+description: "Harness 项目结构研究专用 Subagent — 扫描项目目录结构，生成 repo-map.json 和 module-map.md"
+tools: Read, Glob, Bash
+model: haiku
+permissionMode: plan
 ---`,
 };
 
@@ -228,8 +188,10 @@ export function renderProjection(entry: AdapterRegistryEntry, sourceContent: str
 
   // Generate frontmatter based on tool type and source kind
   if (entry.tool === 'claude') {
-    if (entry.sourceKind === 'slash-command' && skillName) {
-      lines.push(CLAUDE_COMMAND_FRONTMATTER[skillName] || '');
+    if (entry.sourceKind === 'agent' && entry.sourcePath.includes('harness-code-reviewer')) {
+      lines.push(CLAUDE_AGENT_FRONTMATTER['harness-code-reviewer'] || '');
+    } else if (entry.sourceKind === 'agent' && entry.sourcePath.includes('harness-code-researcher')) {
+      lines.push(CLAUDE_AGENT_FRONTMATTER['harness-code-researcher'] || '');
     } else if (skillName) {
       lines.push(CLAUDE_SKILL_FRONTMATTER[skillName] || '');
     }

@@ -27,8 +27,8 @@ function cleanupTempProject(dir: string): void {
 describe('createAdapterRegistry', () => {
   it('should return entries for all platforms', () => {
     const entries = createAdapterRegistry();
-    // Claude: 8 skills + 8 commands = 16, Codex: 8 skills + 1 metadata = 9, Copilot: 1, Cursor: 8 = 34
-    expect(entries.length).toBeGreaterThanOrEqual(30);
+    // Claude: 8 skills + 2 agents = 10, Codex: 8 skills + 1 metadata = 9, Copilot: 1, Cursor: 8 = 28
+    expect(entries.length).toBeGreaterThanOrEqual(25);
     const tools = new Set(entries.map(e => e.tool));
     expect(tools.has('claude')).toBe(true);
     expect(tools.has('codex')).toBe(true);
@@ -55,22 +55,21 @@ describe('createAdapterRegistry', () => {
     ]);
   });
 
-  it('should generate 8 slash command entries for Claude', () => {
+  it('should generate 2 agent entries for Claude', () => {
     const entries = createAdapterRegistry();
-    const claudeCommands = entries.filter(
-      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    const claudeAgents = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'agent',
     );
-    expect(claudeCommands.length).toBe(8);
-    // 验证每个 command 的 projectionPath 正确
-    expect(claudeCommands.some(c => c.projectionPath === '.claude/commands/harness/status.md')).toBe(true);
-    expect(claudeCommands.some(c => c.projectionPath === '.claude/commands/harness/review.md')).toBe(true);
+    expect(claudeAgents.length).toBe(2);
+    expect(claudeAgents.some(a => a.projectionPath === '.claude/agents/harness-code-reviewer.md')).toBe(true);
+    expect(claudeAgents.some(a => a.projectionPath === '.claude/agents/harness-code-researcher.md')).toBe(true);
   });
 
   it('should filter by tool', () => {
     const entries = createAdapterRegistry();
     const claudeOnly = filterByTool(entries, ['claude']);
     expect(claudeOnly.every(e => e.tool === 'claude')).toBe(true);
-    expect(claudeOnly.length).toBe(16); // 8 skills + 8 commands
+    expect(claudeOnly.length).toBe(10); // 8 skills + 2 agents
   });
 });
 
@@ -200,15 +199,16 @@ describe('renderProjection', () => {
     expect(rendered).toContain('allowed-tools:');
   });
 
-  it('should include Claude slash command frontmatter', () => {
+  it('should include Claude agent frontmatter', () => {
     const entries = createAdapterRegistry();
-    const cmdEntry = entries.find(e => e.tool === 'claude' && e.sourceKind === 'slash-command');
-    expect(cmdEntry).toBeDefined();
-    const rendered = renderProjection(cmdEntry!, 'test content');
+    const agentEntry = entries.find(e => e.tool === 'claude' && e.sourceKind === 'agent');
+    expect(agentEntry).toBeDefined();
+    const rendered = renderProjection(agentEntry!, 'test content');
     expect(rendered).toContain('---');
-    expect(rendered).toContain('skill: harness-');
-    expect(rendered).toContain('name:');
-    expect(rendered).toContain('description:');
+    expect(rendered).toContain('name: harness-code-');
+    expect(rendered).toContain('tools:');
+    expect(rendered).toContain('model:');
+    expect(rendered).toContain('permissionMode:');
   });
 
   it('should set disable-model-invocation: true for high-risk skills', () => {
@@ -408,14 +408,14 @@ describe('TASK-ADP-01: Shared skill source compliance', () => {
     }
   });
 
-  it('generates slash command files for Claude', () => {
+  it('generates agent files for Claude', () => {
     const entries = createAdapterRegistry();
     ensureAdapterSources(tempDir, entries);
-    const claudeCommands = entries.filter(
-      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    const claudeAgents = entries.filter(
+      e => e.tool === 'claude' && e.sourceKind === 'agent',
     );
-    expect(claudeCommands.length).toBe(8);
-    for (const entry of claudeCommands) {
+    expect(claudeAgents.length).toBe(2);
+    for (const entry of claudeAgents) {
       expect(existsSync(join(tempDir, entry.sourcePath))).toBe(true);
     }
   });
@@ -466,13 +466,13 @@ describe('TASK-ADP-02: Runtime thin projection', () => {
     expect(rendered).toContain('harness config --repair-adapters');
   });
 
-  it('Claude slash command is thin projection', () => {
+  it('Claude agent is thin projection', () => {
     const entries = createAdapterRegistry();
-    const cmdEntry = entries.find(
-      e => e.tool === 'claude' && e.sourceKind === 'slash-command',
+    const agentEntry = entries.find(
+      e => e.tool === 'claude' && e.sourceKind === 'agent',
     );
-    expect(cmdEntry).toBeDefined();
-    const rendered = renderProjection(cmdEntry!, 'test');
+    expect(agentEntry).toBeDefined();
+    const rendered = renderProjection(agentEntry!, 'test');
     expect(rendered.length).toBeLessThan(3000);
     expect(rendered).toContain(MANAGED_MARKER);
   });

@@ -314,104 +314,63 @@ harness config --repair-adapters [--ai-tools <list>] [--dry-run]
 }
 
 // ============================================================
-// 8 个 Slash Command 模板（仅 Claude）
+// Agent 模板（harness Subagent 定义）
 // ============================================================
 
-function createStatusCommandTemplate(): string {
-  return `查询当前项目的 Harness 工作空间状态：是否初始化、schema 版本、已启用的能力列表。
+function createCodeReviewerAgentTemplate(): string {
+  return `你是一个 Harness 代码审查执行引擎。在隔离上下文中运行 \`harness review\` 命令，对代码进行启发式扫描。
 
-### 执行步骤
+## 审查流程
 
-1. 运行 \`harness status [--json]\`
-2. 解读输出：检查 \`initialized\` 和 \`capabilities\` 字段
-3. 如果未初始化，建议运行 \`harness\` 进入交互式向导
-4. 如果已初始化，可继续使用其他命令
+1. 确认范围：根据传入参数确定审查范围（--local / --staged / --scan <path> / 全量）
+2. 执行审查：运行 \`harness review [范围] [--lite|--full]\`
+3. 收集结果：读取 .harness/reports/review/ 目录下的最新报告
+4. 返回摘要：P0（阻断）/ P1（重要）/ P2（建议）
+
+## 6 个 Reviewer
+
+| Reviewer | 检测内容 |
+|----------|---------|
+| rules-reviewer | TODO/FIXME/HACK/XXX 注释 |
+| bug-scanner | 非测试代码中的调试输出 |
+| deep-bug-analyzer | 硬编码密钥 |
+| history-reviewer | 高频修改文件风险 |
+| standards-reviewer | 代码风格、命名规范 |
+| contract-reviewer | 导出缺少 @contract 注释 |
+
+## 规则
+
+- 不修改项目源代码（--fix 仅修复 P2 级别）
+- 不修改 .harness/config/ 配置
+- 置信度 < 80 的发现自动丢弃
+- 仅审查 .ts/.tsx/.js/.jsx/.py/.java/.go/.rs 文件
 `;
 }
 
-function createDoctorCommandTemplate(): string {
-  return `对当前项目进行全面诊断（8 大类：Node.js 版本、工作空间结构、Hook 投影、Skill 源合规、安全基线等），并给出修复建议。
+function createCodeResearcherAgentTemplate(): string {
+  return `你是一个 Harness 项目结构研究引擎。在隔离上下文中运行 \`harness inspect\` 命令，扫描项目并生成事实数据。
 
-### 执行步骤
+## 扫描流程
 
-1. 运行 \`harness doctor [--json]\`
-2. 逐项解读检查结果（OK/WARN/ERROR）
-3. 对 ERROR 项列出 \`repairCommand\`
-4. 建议运行 \`harness config --repair-adapters\` 修复 adapter 问题
-`;
-}
+1. 确认工作空间：验证 .harness/config/harness.config.json 存在
+2. 执行扫描：运行 \`harness inspect [--full] [--path <dir>] [--rules]\`
+3. 收集产物：读取 repo-map.json、module-map.md、rules.generated.md
+4. 返回摘要：语言、构建文件、文档、Agent 配置、CI 配置
 
-function createInspectCommandTemplate(): string {
-  return `扫描项目目录结构，生成 repo-map.json（事实数据）、module-map.md（模块映射）和 rules.generated.md（自动推导规则）。
+## 产物说明
 
-### 执行步骤
+| 产物 | 路径 | 说明 |
+|------|------|------|
+| repo-map.json | .harness/facts/repo-map.json | 结构化项目事实 |
+| module-map.md | .harness/generated/module-map.md | 可读模块映射 |
+| rules.generated.md | .harness/generated/rules.generated.md | 自动推导规则 |
 
-1. 运行 \`harness inspect [--full] [--path <dir>] [--rules]\`
-2. 解读扫描结果：语言、构建文件、Agent 配置、CI 配置
-3. 建议运行 \`/harness:review\` 进行代码审查
-4. 建议运行 \`/harness:sync\` 同步根文档
-`;
-}
+## 规则
 
-function createSyncCommandTemplate(): string {
-  return `将 Harness 工作流入口写入项目根文档 managed block（README/AGENTS/CLAUDE），确保 AI 工具能发现和使用 harness 能力。
-
-### 前置检查
-
-必须已运行 \`harness inspect\` 生成 repo-map.json。
-
-### 执行步骤
-
-1. 检查 \`.harness/facts/repo-map.json\` 存在
-2. 运行 \`harness sync [--check] [--docs <list>] [--dry-run]\`
-3. 如果漂移（--check 返回 2401），重新运行 sync 更新文档
-`;
-}
-
-function createReviewCommandTemplate(): string {
-  return `对项目代码进行启发式扫描，生成双格式审查报告（Markdown + JSON），支持 6 个 reviewer 覆盖安全、契约、标准、历史等维度。
-
-### 执行步骤
-
-1. 运行 \`harness review [--local|--staged|--scan <path>] [--lite|--full]\`
-2. 解读报告：P0（阻断）/ P1（重要）/ P2（建议）
-3. 如有 P0 问题，建议修复后再继续
-4. 完成后建议运行 \`/harness:develop\` 开始开发
-`;
-}
-
-function createDevelopCommandTemplate(): string {
-  return `SDD 工作流入口 — 创建新变更提案（M1 阶段仅 --propose 可用）。
-
-### 执行步骤
-
-1. 确认变更名称（kebab-case，如 \`add-user-auth\`）
-2. 运行 \`harness develop <name> --propose\`
-3. AI 将引导填充 proposal.md 各章节
-4. 完成后建议使用 OpenSpec 继续 spec 阶段
-`;
-}
-
-function createKnowledgeCommandTemplate(): string {
-  return `索引项目知识文档或搜索已有知识内容。
-
-### 执行步骤
-
-1. 首次使用：运行 \`harness knowledge --index\` 构建索引
-2. 搜索：运行 \`harness knowledge --search "<关键词>" [--limit N]\`
-3. 解读搜索结果（按得分降序，含源文件路径和摘要片段）
-`;
-}
-
-function createConfigCommandTemplate(): string {
-  return `配置迁移或适配器修复。
-
-### 执行步骤
-
-1. 迁移旧工具：运行 \`harness config --migrate-<source>\`
-2. 修复适配器：运行 \`harness config --repair-adapters [--ai-tools <list>]\`
-3. 预览不写入：添加 \`--dry-run\`
-4. 修复后运行 \`/harness:doctor\` 验证
+- 只读为主：仅写入 .harness/facts/ 和 .harness/generated/
+- 不修改项目源代码或配置
+- 不覆盖人工维护的规则文件
+- 不自动触发下游 review/sync 流程
 `;
 }
 
@@ -428,17 +387,6 @@ const SKILL_TEMPLATES: Record<string, () => string> = {
   'harness-develop': createDevelopTemplate,
   'harness-knowledge': createKnowledgeTemplate,
   'harness-config': createConfigTemplate,
-};
-
-const COMMAND_TEMPLATES: Record<string, () => string> = {
-  'harness-status': createStatusCommandTemplate,
-  'harness-doctor': createDoctorCommandTemplate,
-  'harness-inspect': createInspectCommandTemplate,
-  'harness-sync': createSyncCommandTemplate,
-  'harness-review': createReviewCommandTemplate,
-  'harness-develop': createDevelopCommandTemplate,
-  'harness-knowledge': createKnowledgeCommandTemplate,
-  'harness-config': createConfigCommandTemplate,
 };
 
 const SKILL_NAMES = Object.keys(SKILL_TEMPLATES);
@@ -491,18 +439,16 @@ harness config     # Manage configuration
 /**
  * Create the adapter registry with all platform definitions
  *
- * 对每个工具（claude/codex/cursor）生成 8 个独立 Skill 条目：
- * - Claude: 额外生成 8 个 Slash Command 条目
+ * 对每个工具（claude/codex/cursor）生成 8 个独立 Skill + 2 个 Agent
  * - Copilot: 保持单文件指令格式
  */
 export function createAdapterRegistry(): AdapterRegistryEntry[] {
   const entries: AdapterRegistryEntry[] = [];
 
   // ============================================================
-  // Claude: 8 个 Skill + 8 个 Slash Command
+  // Claude: 8 个 Skill + 2 个 Agent
   // ============================================================
   for (const skillName of SKILL_NAMES) {
-    // Skill 条目
     entries.push({
       tool: 'claude',
       sourcePath: `.harness/adapters/claude/skills/${skillName}/SKILL.md`,
@@ -513,20 +459,28 @@ export function createAdapterRegistry(): AdapterRegistryEntry[] {
       skillName,
       repairCommand: DEFAULT_REPAIR_COMMAND,
     });
-
-    // Slash Command 条目
-    const cmdName = skillName.replace('harness-', '');
-    entries.push({
-      tool: 'claude',
-      sourcePath: `.harness/adapters/claude/skills/${skillName}/command.md`,
-      projectionPath: `.claude/commands/harness/${cmdName}.md`,
-      templateContent: COMMAND_TEMPLATES[skillName](),
-      kind: 'source',
-      sourceKind: 'slash-command',
-      skillName,
-      repairCommand: DEFAULT_REPAIR_COMMAND,
-    });
   }
+
+  // Claude Agents
+  entries.push({
+    tool: 'claude',
+    sourcePath: '.harness/adapters/claude/agents/harness-code-reviewer.md',
+    projectionPath: '.claude/agents/harness-code-reviewer.md',
+    templateContent: createCodeReviewerAgentTemplate(),
+    kind: 'source',
+    sourceKind: 'agent',
+    repairCommand: DEFAULT_REPAIR_COMMAND,
+  });
+
+  entries.push({
+    tool: 'claude',
+    sourcePath: '.harness/adapters/claude/agents/harness-code-researcher.md',
+    projectionPath: '.claude/agents/harness-code-researcher.md',
+    templateContent: createCodeResearcherAgentTemplate(),
+    kind: 'source',
+    sourceKind: 'agent',
+    repairCommand: DEFAULT_REPAIR_COMMAND,
+  });
 
   // ============================================================
   // Codex: 8 个 Skill（.agents/skills/harness-*/）
