@@ -156,6 +156,10 @@ export async function queryRemoteKnowledge(options: {
   const { client, projectId } = await resolveKnowledgeRemoteContext(options);
   const query = options.query.trim();
   const query_hash = sha256Bytes(query);
+  // 幂等键绑定的是一次操作，预算属于操作的一部分：只用查询文本派生会让
+  // 同文本不同 limit 的第二次查询在服务端命中 KNOWLEDGE_QUERY_IDEMPOTENCY_CONFLICT
+  // （2026-09 审查实测）。v2 前缀同时避免与服务端按旧方案记录的绑定比对。
+  const operation_hash = sha256Bytes(`${query}\u0000${options.limit}`);
   const requestId = uuidV7();
   let result;
   try {
@@ -175,7 +179,7 @@ export async function queryRemoteKnowledge(options: {
         }
       },
       requestId,
-      idempotencyKey: `knowledge-query:${query_hash.slice("sha256:".length)}`
+      idempotencyKey: `knowledge-query-v2:${operation_hash.slice("sha256:".length)}`
     });
   } catch (error) {
     if (error instanceof ApiError) {

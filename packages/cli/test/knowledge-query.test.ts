@@ -131,6 +131,69 @@ describe("hunter-harness knowledge query", () => {
     )).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("幂等键绑定查询文本与预算：同文本不同 limit 不共用幂等键", async () => {
+    const query = "原始 ZIP";
+    const result = {
+      result_id: "result_archive",
+      kind: "archive_knowledge" as const,
+      summary: "原始 ZIP 保留在服务端。",
+      relevance: "high" as const,
+      source: ".harness/archive/change/spec/design.md",
+      verified_at: "2026-08-14T00:00:00.000Z",
+      source_version: "pv_archive",
+      conflicts_with_intent: false
+    };
+    const keys: string[] = [];
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      keys.push(new Headers(init?.headers).get("Idempotency-Key") ?? "");
+      const body = JSON.parse(String(init?.body)) as { query_id: string };
+      const receiptWithoutId = {
+        schema_version: 1 as const,
+        query_hash: sha256Bytes(query),
+        project_id: "prj_knowledge",
+        index_generation: "generation-1",
+        result_ids: [result.result_id],
+        source_versions: ["pv_archive"],
+        result_set_hash: knowledgeQueryHttpResultSetHash({
+          index_generation: "generation-1",
+          result_ids: [result.result_id],
+          source_versions: ["pv_archive"]
+        }),
+        status: "succeeded" as const,
+        executed_at: "2026-08-14T00:00:00.000Z",
+        reason_code: "initial_intent" as const
+      };
+      return json({
+        schema_version: 1,
+        query_id: body.query_id,
+        project_id: "prj_knowledge",
+        receipt: {
+          ...receiptWithoutId,
+          receipt_id: knowledgeQueryHttpReceiptId(receiptWithoutId)
+        },
+        results: [result]
+      });
+    });
+    const run = (limit: number) => runCli(["knowledge", "query", query, "--limit", String(limit), "--json"], {
+      cwd: root,
+      resourcesRoot,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      env: { ...recoveryEnv },
+      stdout: (value) => stdout.push(value),
+      stderr: (value) => stderr.push(value)
+    });
+
+    expect(await run(5), stderr.join("\n")).toBe(0);
+    expect(await run(8), stderr.join("\n")).toBe(0);
+    expect(await run(5), stderr.join("\n")).toBe(0);
+    expect(keys).toHaveLength(3);
+    expect(keys[0]).toMatch(/^knowledge-query-v2:[0-9a-f]{64}$/u);
+    // 同文本不同 limit 曾经共键，服务端按 request_hash 比对必判冲突；
+    // 同文本同 limit 则保持幂等重放语义。
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(keys[2]).toBe(keys[0]);
+  });
+
   it("knowledge status 返回管道自查（P0-1：查询为空时区分 job 未跑/失败/结果为空）", async () => {
     const fetch = vi.fn(async () => json({
       pending_count: 0,
