@@ -18,7 +18,7 @@ description: harness-plan 的阶段检查清单和覆盖检查列表。仅在执
 - [ ] 引导返回 `code:"PLAN_BOOTSTRAPPED"`，记下 `runId`/`attempt`/`tier`/`defaultPhases`/`changeBase`；后续 finalize 必须复用同一 `runId`/`attempt`
 - [ ] 不再手工生成 run-id、不再单独跑 doctor/prepare/capture/classify/append；需要单步排查时才用 SKILL.md 阶段 0.5b 的等价分解
 - [ ] 引导失败时按返回的 `code` 处理（`PROJECT_ROOT_INVALID` → 该项目未 init），**不得**跳过引导直接写产物
-- [ ] 项目已绑定平台时执行一次远端 knowledge `query`；不另跑前置 sync，不创建本地索引
+- [ ] 触发条件成立（涉及历史取舍/兼容边界/疑似重复问题/用户要求延续）才执行一次远端 knowledge `query`，全新独立需求跳过；不另跑前置 sync，不创建本地索引
 - [ ] 查询失败追加 `issue`，不得回退本地 archive/SQLite、重跑“sync + query”循环或假装已读取历史
 
 ## 阶段 2：歧义优先检查与复杂度分级
