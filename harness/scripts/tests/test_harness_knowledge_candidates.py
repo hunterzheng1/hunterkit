@@ -471,3 +471,81 @@ class ArchiveWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+DESIGN_MD = """# {change}-design
+
+## Goal
+
+让用量上报在离线时也不丢失数据。
+
+## Requirements
+
+- requirement:req-001 [failure_behavior]: git/diff 失败跳过规模判定、不阻断 propose
+
+## Risks
+
+- 遥测失败可能拖慢命令
+- Mitigation: 上报失败不阻断 commit
+
+## Invariants
+
+- None.
+
+## Tradeoffs
+
+- 否决独立 /opsx-quick-simple 入口，因为会制造第二入口、与现有流程分裂
+- 采纳在既有 propose 流程内加 Simple 标记
+- None.
+
+## Compatibility boundaries
+
+- 旧 proposal 没有 auto-scale 字段时不受影响
+- None.
+"""
+
+
+class PlanDesignExtractionTest(unittest.TestCase):
+    """build_plan_candidates 的 design 章节提取（审查报告 2026-09 补口）。"""
+
+    def _extract(self) -> list[dict]:
+        return hkc.build_plan_candidates(
+            _archive_dir_with_design(),
+            change_key="simple-mode-adoption",
+            archive_id="arc_test",
+            producer_version="1",
+            created_at="2026-09-06T00:00:00.000Z",
+        )
+
+    def test_tradeoffs_become_decision_candidates(self) -> None:
+        candidates = self._extract()
+        tradeoffs = [c for c in candidates if c["entry_type"] == "decision"]
+        self.assertEqual(len(tradeoffs), 2)
+        self.assertIn("否决独立 /opsx-quick-simple 入口", tradeoffs[0]["summary"])
+        self.assertEqual(tradeoffs[0]["body"], f"取舍：{tradeoffs[0]['summary']}")
+        self.assertEqual(tradeoffs[0]["confidence"], hkc._PLAN_CONFIDENCE)
+        self.assertTrue(all("None." not in c["summary"] for c in tradeoffs))
+
+    def test_compatibility_boundaries_become_api_contract_candidates(self) -> None:
+        candidates = self._extract()
+        compat = [c for c in candidates if c["entry_type"] == "api-contract"]
+        self.assertEqual(len(compat), 1)
+        self.assertIn("旧 proposal 没有 auto-scale 字段时不受影响", compat[0]["summary"])
+        self.assertEqual(compat[0]["keywords"], hkc._keywords("compatibility", "api-contract", "兼容"))
+
+    def test_candidate_ids_stay_stable_across_runs(self) -> None:
+        self.assertEqual(
+            [c["candidate_id"] for c in self._extract()],
+            [c["candidate_id"] for c in self._extract()],
+        )
+
+
+def _archive_dir_with_design() -> Path:
+    import tempfile
+    root = Path(tempfile.mkdtemp(prefix="hkc-plan-"))
+    plans = root / "plans"
+    plans.mkdir(parents=True)
+    (plans / "simple-mode-adoption-design.md").write_text(
+        DESIGN_MD.replace("{change}", "simple-mode-adoption"), encoding="utf-8"
+    )
+    return root

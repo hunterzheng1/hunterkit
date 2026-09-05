@@ -701,6 +701,81 @@ def _invariants_from_design(
     return out
 
 
+def _tradeoffs_from_design(
+    design_text: str,
+    *,
+    change_key: str,
+    archive_id: str,
+    producer_version: str,
+    created_at: str,
+) -> list[dict[str, Any]]:
+    """Parse ``## Tradeoffs`` bullet list into decision candidates.
+
+    被否决的备选方案及其理由是下一次决策最需要的知识（2026-09 审查报告
+    「design 更有意义，但不能整份照搬」第 1 条：如「否决独立
+    /opsx-quick-simple，因为会制造第二入口」）。
+    """
+    sections = _markdown_sections(design_text)
+    out: list[dict[str, Any]] = []
+    for line in sections.get("Tradeoffs", []):
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        text = _unescape_markdown(stripped[2:].strip())
+        if not text or text == "None.":
+            continue
+        out.append(_plan_candidate(
+            change_key=change_key,
+            archive_id=archive_id,
+            producer_version=producer_version,
+            created_at=created_at,
+            kind="decision",
+            entry_type="decision",
+            summary=text,
+            body=f"取舍：{text}",
+            keywords=_keywords("tradeoff", "decision", "取舍"),
+            source_refs=_plan_source_refs(change_key, f"plans/{change_key}-design.md"),
+        ))
+    return out
+
+
+def _compatibility_from_design(
+    design_text: str,
+    *,
+    change_key: str,
+    archive_id: str,
+    producer_version: str,
+    created_at: str,
+) -> list[dict[str, Any]]:
+    """Parse ``## Compatibility boundaries`` bullet list into api-contract candidates.
+
+    审查报告同节第 3 条：兼容边界（如「旧 proposal 没有 auto-scale 字段时
+    不受影响」）决定升级与回滚的判断，是孤立风险条目替代不了的知识。
+    """
+    sections = _markdown_sections(design_text)
+    out: list[dict[str, Any]] = []
+    for line in sections.get("Compatibility boundaries", []):
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        text = _unescape_markdown(stripped[2:].strip())
+        if not text or text == "None.":
+            continue
+        out.append(_plan_candidate(
+            change_key=change_key,
+            archive_id=archive_id,
+            producer_version=producer_version,
+            created_at=created_at,
+            kind="compatibility",
+            entry_type="api-contract",
+            summary=text,
+            body=f"兼容边界：{text}",
+            keywords=_keywords("compatibility", "api-contract", "兼容"),
+            source_refs=_plan_source_refs(change_key, f"plans/{change_key}-design.md"),
+        ))
+    return out
+
+
 def _tasks_from_plan(
     plan_text: str,
     *,
@@ -846,6 +921,20 @@ def build_plan_candidates(
             created_at=created_at,
         ))
         collect(_invariants_from_design(
+            design_text,
+            change_key=change_key,
+            archive_id=archive_id,
+            producer_version=producer_version,
+            created_at=created_at,
+        ))
+        collect(_tradeoffs_from_design(
+            design_text,
+            change_key=change_key,
+            archive_id=archive_id,
+            producer_version=producer_version,
+            created_at=created_at,
+        ))
+        collect(_compatibility_from_design(
             design_text,
             change_key=change_key,
             archive_id=archive_id,
