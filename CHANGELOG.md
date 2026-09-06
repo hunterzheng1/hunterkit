@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.4.17] — hunter-harness
+
+> 知识查询幂等键修复（knowledge-audit 落地轮）：hunter-harness 0.4.16 → 0.4.17。
+> bundle 0.2.80（见下）。验证：cli knowledge-query 9/9（含新增幂等键回归）+
+> core seam 14/14 + tsc -b + eslint 全绿。
+
+### Fixed
+
+- **knowledge query 幂等键绑定查询文本+预算**（b077f8a）：幂等键由仅查询文本
+  哈希改为 `knowledge-query-v2:sha256(query + NUL + limit)`。同文本不同 limit
+  的第二次查询不再命中服务端 `KNOWLEDGE_QUERY_IDEMPOTENCY_CONFLICT`
+  （2026-09-05 审查实测的真实冲突路径）；同文本同 limit 保持幂等重放。
+
+## [0.4.20] — workflow-harness
+
+> 知识能力审查落地轮（bundle 内容变更）：workflow-harness 0.4.19 → 0.4.20，
+> bundle 0.2.79 → 0.2.80。hunter-harness 0.4.17 同批发布。
+> 验证：Python 22/22（build_plan_candidates 首次获得直接测试）+ bundle 契约
+> 19/19 + sync 重生成两 profile × 5 agent 镜像。
+
+### Changed
+
+- **plan 知识查询条件化**（4ab7261）：harness-plan SKILL.md 阶段 1 与
+  checklist 由"每次必查"改为条件触发（历史取舍/兼容边界/疑似重复/用户要求
+  延续），保留唯一远程入口、事件落账与无本地回退契约。审查报告·查询节实测：
+  无条件查询的自然语言原文 8/8 零命中，强制执行只有成本没有收益。
+- **design 章节候选扩展**（03d27cc）：build_plan_candidates 新增
+  `## Tradeoffs`→decision 与 `## Compatibility boundaries`→api-contract
+  提取（与 hunter-platform 侧镜像同批落地），首次为 build_plan_candidates
+  补 python 直接测试（tradeoffs/compat 提取、None 跳过、candidate_id 稳定）。
+
+
 ## [0.4.16] — hunter-harness
 
 > plan 文档渲染层增强（workflow-harness 无源码变更，本版只发 CLI）：
