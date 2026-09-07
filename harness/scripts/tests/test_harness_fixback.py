@@ -373,6 +373,84 @@ class FixbackBatchTests(unittest.TestCase):
             self.assertFalse(ledger["validations"]["unitTestFull"]["reusable"])
             self.assertTrue(ledger["validations"]["apiTest"]["reusable"])
 
+    def test_resolving_an_issue_writes_invalidation_receipt_for_efficiency(self) -> None:
+        """失效回执落 runtime/invalidations/，供效率统计 invalidationReasons 消费。"""
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            change_dir = Path(tmp)
+            source = change_dir / "src" / "engine.ts"
+            source.parent.mkdir(parents=True)
+            source.write_text("export {}\n", encoding="utf-8")
+            ledger_path = change_dir / "evidence" / "verification-ledger.json"
+            ledger_path.parent.mkdir(parents=True)
+            ledger_path.write_text(
+                json.dumps({
+                    "verificationTargets": {
+                        "unit": {
+                            "verification": "unitTestFull",
+                            "inputsFiles": ["src/engine.ts"],
+                            "reusable": True,
+                        },
+                    },
+                    "validations": {
+                        "unitTestFull": {
+                            "inputsFiles": ["src/engine.ts"],
+                            "reusable": True,
+                        },
+                    },
+                }),
+                encoding="utf-8",
+            )
+            module.open_batch(
+                change_dir,
+                batch_id="batch-receipt",
+                product_identity="sha256:before",
+                root_cause="快照返回可变引用",
+            )
+            module.add_issue(
+                change_dir,
+                batch_id="batch-receipt",
+                issue_id="I-1",
+                summary="复制快照",
+                risk_tags=[],
+            )
+            module.resolve_issue(
+                change_dir,
+                batch_id="batch-receipt",
+                issue_id="I-1",
+                red_evidence=write_evidence(
+                    change_dir,
+                    "evidence/red-receipt.json",
+                    kind="red",
+                    status="FAIL",
+                    product_identity="sha256:before",
+                    evidence_id="red-receipt",
+                ),
+                green_evidence=write_evidence(
+                    change_dir,
+                    "evidence/green-receipt.json",
+                    kind="green",
+                    status="PASS",
+                    product_identity="sha256:after",
+                    evidence_id="green-receipt",
+                ),
+                changed_files=["src/engine.ts"],
+            )
+
+            receipt_path = (
+                change_dir / "runtime" / "invalidations"
+                / "fixback-batch-receipt.json"
+            )
+            self.assertTrue(receipt_path.is_file())
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt["reasonCode"], "FIXBACK_AFFECTED_INPUT_CHANGED"
+            )
+            self.assertEqual(receipt["batchId"], "batch-receipt")
+            self.assertEqual(receipt["targetIds"], ["unit"])
+            self.assertEqual(receipt["validations"], ["unitTestFull"])
+            self.assertEqual(receipt["changedFiles"], ["src/engine.ts"])
+
     def test_close_batch_flips_fixback_session_to_closed(self) -> None:
         """F-5：批次关闭时托管会话必须同步 CLOSED，不再误拦后续 launch-review。"""
         self.assertTrue(SCRIPT.is_file(), "harness_fixback.py must be implemented")

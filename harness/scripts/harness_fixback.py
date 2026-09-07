@@ -752,6 +752,25 @@ def invalidate_affected_evidence(
                 entry["invalidation"] = dict(invalidation)
                 validation_names.append(str(name))
     _write_json(ledger_path, ledger)
+    # Also persist a receipt under runtime/invalidations/ so the efficiency
+    # summary's invalidationReasons reflects real invalidations. The reader
+    # (harness_efficiency.collect_efficiency_summary) existed since 3c09c99 but
+    # no writer ever produced these records.
+    invalidation_receipt = {
+        "schemaVersion": 1,
+        "reasonCode": "FIXBACK_AFFECTED_INPUT_CHANGED",
+        "batchId": batch_id,
+        "changedFiles": sorted(normalized),
+        "targetIds": sorted(target_ids),
+        "validations": sorted(validation_names),
+        "createdAt": now_iso(),
+    }
+    invalidations_dir = _state_root(change_dir) / "runtime" / "invalidations"
+    invalidations_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        invalidations_dir / f"fixback-{batch_id}.json",
+        invalidation_receipt,
+    )
     return {
         "ok": True,
         "targetIds": sorted(target_ids),
