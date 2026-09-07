@@ -43,7 +43,7 @@ harness_task.py status --project . --change <cn> --json
 | TASK_NOT_BEGUN | change 缺 meta/task.json | 先运行 begin |
 | TASK_ALREADY_FINISHED | 任务已终态（completed/abandoned/superseded） | `status` 查看结果；新任务换 change 名 |
 | TASK_TIER_UPGRADE_REQUIRED | diff 触发 full 档信号（rc=3） | 改用 `/harness-plan` 完整流程；change 目录保留可续用 |
-| FOREIGN_PATHS_PRESENT | begin 前预存且任务未触碰的脏路径（或 ownership 边界外路径） | 移出工作区/提交/stash 后重跑 finish |
+| FOREIGN_PATHS_PRESENT | begin 前预存且任务未触碰的脏路径（或 .harness 结构越界） | 移出工作区/提交/stash 后重跑 finish |
 | VERIFICATION_TARGET_MISSING | build-profile 未声明验证目标（含回退链） | `harness_preflight.py detect --project . --json` 重新探测 |
 | VERIFICATION_FAILED | 验证命令 exit≠0（ledger 已记失败） | 修复后重跑 finish（ledger 覆盖） |
 | GIT_COMMIT_FAILED | git add/commit 失败 | 手工检查 git status；或 `--no-commit` 跳过 |
@@ -58,8 +58,11 @@ harness_task.py status --project . --change <cn> --json
 ## finish 编排步骤（对照排障）
 
 1. classify（post-run，读脏树 git status）
-2. 档位裁决 + 外来脏路径检测（begin 脏树基线 + classify foreignPaths 双通道）
-3. 声明 ownership.productPaths（classify 的 productPaths）
+2. 档位裁决 + 外来脏路径检测（begin 脏树基线 + classify foreignPaths
+   双通道；重试时上次验证副作用弄脏的产品树文件按任务工作并入
+   ownership，不拒绝——P9）
+3. 声明 ownership.productPaths（classify 的 productPaths + 契约外
+   产品树脏路径）
 4. 写 gate-policy（plannedPhases=["task","archive"]）
 5. 跑档位验证（回退链解析 argv）
 6. 每项验证写 ledger（evidence 落 `evidence/<key>-<ts>.log`）

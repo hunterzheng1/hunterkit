@@ -899,27 +899,33 @@ def cmd_finish(args: argparse.Namespace) -> int:
     #       （harness_gate.py:1494-1497），foreignPaths 恒空——只有基线
     #       能拦住预存脏路径。
     #    b) classify workspaceBreakdown.foreignPaths（重试路径：契约已
-    #       存在）：按前缀剔除本 change 自身的状态文件（meta/* 不在
-    #       _DYNAMIC_OWN_DIRS，重试必误报）。
+    #       存在）：只对 .harness 命名空间生效——结构性越界（别的 change
+    #       的状态、state 根）即使被 .gitignore 挡住不进提交，也会污染
+    #       归档快照，必须拒绝。产品树路径不在此列（P9）：重试时契约是
+    #       上次 finish 的快照，上次验证的副作用文件（如 npm pretest →
+    #       sync:harness 改 bundle manifest）不在快照里，但它们是任务
+    #       自身验证链的产物——按 dirtyBaseline 的同一原则（begin 后
+    #       新出现/变更 = 任务工作），并入 productPaths 重新声明，不拒绝。
     baseline = task.get("dirtyBaseline")
     baseline = dict(baseline) if isinstance(baseline, dict) else {}
     foreign_paths = detect_foreign_dirt(project, baseline)
     breakdown = classification.get("workspaceBreakdown") or {}
     own_prefix = f".harness/changes/{change}/"
-    foreign_paths = sorted(
-        set(foreign_paths)
-        | {
-            str(path)
-            for path in (breakdown.get("foreignPaths") or [])
-            if not str(path).replace("\\", "/").startswith(own_prefix)
-        }
+    contract_foreign = [
+        str(path).replace("\\", "/")
+        for path in (breakdown.get("foreignPaths") or [])
+    ]
+    harness_foreign = sorted(
+        path for path in contract_foreign
+        if path.startswith(".harness/") and not path.startswith(own_prefix)
     )
+    foreign_paths = sorted(set(foreign_paths) | set(harness_foreign))
     if foreign_paths:
         emit(
             error_envelope(
                 "FOREIGN_PATHS_PRESENT",
                 "工作区存在任务边界外的脏路径（begin 前已存在且未被本任务"
-                "修改，或 ownership 边界外），轻任务不得提交它们",
+                "修改，或 .harness 结构越界），轻任务不得提交它们",
                 field_path="workspaceBreakdown.foreignPaths",
                 problems=foreign_paths,
                 recovery_action=(
@@ -966,10 +972,17 @@ def cmd_finish(args: argparse.Namespace) -> int:
     # ②b 声明产品所有权：classify 的 productPaths 即本次 diff 的产品路径。
     #     不声明则归档把全部改动判 foreignPaths → DIFF_ZERO_WITH_NONEMPTY_COMMIT
     #     （declare_product_ownership 的文档注释即此坑）。
+    #     重试路径（P9）：上次契约快照外的产品树脏路径（上次验证的副作用
+    #     等）一并并入——归档的 compute_ownership_diff 按新契约把它们判
+    #     owned，提交范围与声明范围一致。
     product_paths = sorted(
         {
-            str(path)
+            str(path).replace("\\", "/")
             for path in (breakdown.get("productPaths") or [])
+        }
+        | {
+            path for path in contract_foreign
+            if not path.startswith(".harness/")
         }
     )
     if product_paths:

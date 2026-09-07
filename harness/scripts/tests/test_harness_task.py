@@ -335,6 +335,71 @@ class FinishRoundTripTests(HarnessTaskFixture):
         self.assertEqual(out2["code"], "TASK_FINISHED")
         self.assertEqual(out2["tier"], "standard")
 
+    def test_verification_side_effect_file_survives_finish_retry(self) -> None:
+        """P9：首次 finish 的验证副作用文件不得让重试被 FOREIGN 误拒。
+
+        场景（试点 T3-r2 实录）：attempt 1 声明 ownership 后，验证链的
+        副作用（npm pretest → sync:harness 改 bundle manifest）弄脏了
+        契约外的产品树文件，随后验证失败退出；attempt 2 的 classify 按
+        旧契约把它判 foreignPaths → FOREIGN_PATHS_PRESENT 死锁。
+        修复语义：begin 后新出现的产品树路径 = 任务工作，并入 ownership
+        重新声明，重试直接成功且副作用文件进任务提交。
+        """
+        self._begin("side-effect")
+        (self.project / "check.py").write_text("print('v2')\n", encoding="utf-8")
+
+        original_run = ht._run_verification
+        attempts = {"n": 0}
+
+        def flaky_with_side_effect(project, change_dir, verification):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                # 模拟 npm pretest 副作用：验证过程中改写契约外文件
+                # （attempt 1 的 classify/declare 已完成）。
+                (project / "manifest.json").write_text(
+                    '{"hash": "synced"}\n', encoding="utf-8"
+                )
+                return {}, ht.error_envelope(
+                    "VERIFICATION_FAILED",
+                    "模拟 flaky 测试失败",
+                )
+            return original_run(project, change_dir, verification)
+
+        try:
+            ht._run_verification = flaky_with_side_effect
+            rc1, out1 = self._finish("side-effect")
+        finally:
+            ht._run_verification = original_run
+        self.assertEqual(rc1, 2, out1)
+        self.assertEqual(out1["code"], "VERIFICATION_FAILED")
+
+        # attempt 2：修复前在此处 FOREIGN_PATHS_PRESENT（manifest.json）。
+        rc2, out2 = self._finish("side-effect")
+        self.assertEqual(rc2, 0, out2)
+        self.assertEqual(out2["code"], "TASK_FINISHED")
+
+        # 副作用文件进入任务提交（git add -A 范围与 ownership 声明一致）。
+        committed = self._git("show", "--name-only", "--pretty=format:", "HEAD")
+        self.assertIn("manifest.json", committed.splitlines())
+        self.assertIn("check.py", committed.splitlines())
+
+        # 归档的 ownership 投影把两个产品文件都判 owned；副作用文件
+        # 不在 foreignPaths（fixture 无 .gitignore，.harness 自身路径
+        # 出现在投影 foreignPaths 是既有 fixture 形态，与本修复无关）。
+        archive_dir = Path(out2["archiveDir"])
+        ownership_diff = json.loads(
+            (archive_dir / "evidence" / "ownership-diff.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
+        self.assertEqual(
+            sorted(ownership_diff.get("files") or []),
+            ["check.py", "manifest.json"],
+        )
+        self.assertNotIn(
+            "manifest.json", ownership_diff.get("foreignPaths") or []
+        )
+
     def test_no_commit_escape_hatch(self) -> None:
         """--no-commit：不提交不归档，工作区保持脏树。"""
         self._begin("no-commit")
