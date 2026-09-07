@@ -45,9 +45,10 @@ class AcceptanceStatsRealTests(unittest.TestCase):
         hd.cmd_build(SKILLS_ROOT, java, "java")
         independent_java = len(list(java.glob("harness-*/SKILL.md")))
         self.assertEqual(ha.count_skills(java), independent_java)
-        # Java build = 11 base（run/test 已于 0.4.9 并入 harness-execute）
-        # + 2 java-only overlay skills (harness-apidoc, harness-package)
-        self.assertEqual(independent_java, 13)
+        # Java build = 12 base（run/test 已于 0.4.9 并入 harness-execute；
+        # harness-task 于批次 1 加入）+ 2 java-only overlay skills
+        # (harness-apidoc, harness-package)
+        self.assertEqual(independent_java, 14)
 
     def test_source_skill_lines_are_real_disk_values(self) -> None:
         lines = ha.source_skill_lines(SKILLS_ROOT)
