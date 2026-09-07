@@ -414,6 +414,212 @@ class FinishRoundTripTests(HarnessTaskFixture):
         self.assertTrue(dirty)
 
 
+class VerificationPlanTests(HarnessTaskFixture):
+    """P1/P5/P6：变更感知验证计划（cosmic-pulse-curie 计划 §修复 1-3）。"""
+
+    def test_p5_standard_tier_dedupes_same_argv(self) -> None:
+        """P5：三项验证全解析到同一 argv → 只执行 1 次，摘要 3 名义项。"""
+        self._begin("dedup-run")
+        (self.project / "check.py").write_text("print('v2')\n", encoding="utf-8")
+        executed: list[list[str]] = []
+        original = ht.htr.run_managed_command
+
+        def counting_run(argv, **kwargs):
+            executed.append(list(argv))
+            return original(argv, **kwargs)
+
+        try:
+            ht.htr.run_managed_command = counting_run
+            rc, out = self._finish("dedup-run")
+        finally:
+            ht.htr.run_managed_command = original
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "standard")
+        # compile/unitTest/unitTestFull 全回退到唯一 target → 恰 1 次执行。
+        self.assertEqual(len(executed), 1, executed)
+        self.assertEqual(executed[0], ["python", "check.py"])
+        # 摘要仍逐名义项输出：1 执行 + 2 deduped。
+        by_name = {v["verification"]: v for v in out["verifications"]}
+        self.assertEqual(
+            sorted(by_name), ["compile", "unitTest", "unitTestFull"]
+        )
+        deduped = [v for v in out["verifications"] if v["status"] == "DEDUPED"]
+        self.assertEqual(len(deduped), 2)
+        self.assertTrue(all(v.get("dedupedFrom") for v in deduped))
+        # ledger 只有一条真实执行记录。
+        ledger = self._ledger(Path(out["archiveDir"]))
+        self.assertEqual(sorted(ledger["validations"]), ["unitTestFull"])
+
+    def test_p1_docs_only_in_contract_scope_uses_doc_contract_test(self) -> None:
+        """P1：docs-only + harness skill md → doc contract 测试替代回退链。"""
+        skill_md = self.project / "harness" / "harness-execute" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True, exist_ok=True)
+        skill_md.write_text("# skill doc\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-m", "add skill doc")
+        self._begin("doc-contract-run")
+        skill_md.write_text("# skill doc v2\n", encoding="utf-8")
+        executed: list[list[str]] = []
+        original = ht.htr.run_managed_command
+
+        def capturing_run(argv, **kwargs):
+            executed.append(list(argv))
+            if "test_harness_doc_contract" in argv:
+                # fixture 项目没有真实测试目录——stub 成功结果。
+                return ht.htr.CommandResult(
+                    returncode=0, timed_out=False,
+                    duration_seconds=0.01, process_tree_isolated=True,
+                )
+            return original(argv, **kwargs)
+
+        try:
+            ht.htr.run_managed_command = capturing_run
+            rc, out = self._finish("doc-contract-run")
+        finally:
+            ht.htr.run_managed_command = original
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "fast")
+        # unitTest 项的 argv 是 doc contract 测试，不是回退链的 check.py。
+        self.assertEqual(len(executed), 1, executed)
+        self.assertIn("test_harness_doc_contract", executed[0])
+        self.assertNotIn("check.py", executed[0])
+        summary = out["verifications"][0]
+        self.assertEqual(summary["reason"], "doc-contract")
+        # ledger 以 unitTest + 显式 files 记账（doc 路径本身）。
+        ledger = self._ledger(Path(out["archiveDir"]))
+        entry = ledger["validations"]["unitTest"]
+        self.assertEqual(entry["status"], "OK")
+        self.assertEqual(
+            entry.get("inputsFiles"),
+            ["harness/harness-execute/SKILL.md"],
+        )
+
+    def test_p1_docs_only_outside_scope_keeps_fallback(self) -> None:
+        """P1 边界：docs-only 但根 README.md 不在 doc contract 扫描范围 → 回退。"""
+        self._begin("root-readme")
+        (self.project / "README.md").write_text("v2\n", encoding="utf-8")
+        rc, out = self._finish("root-readme")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "fast")
+        summary = out["verifications"][0]
+        self.assertEqual(summary["reason"], "fallback")
+        self.assertEqual(summary["resolvedAs"], "unitTestFull")
+        ledger = self._ledger(Path(out["archiveDir"]))
+        self.assertEqual(sorted(ledger["validations"]), ["unitTestFull"])
+
+    def test_p6_python_source_change_uses_targeted_unittest(self) -> None:
+        """P6：harness_change.py 变更 → unitTest 项是定向 unittest。
+
+        compile/unitTestFull 仍走 npm 链（回退到唯一 target）且互相去重
+        ——共 2 次执行（1× check.py + 1× 定向 python）。
+        """
+        scripts_dir = self.project / "harness" / "scripts"
+        tests_dir = scripts_dir / "tests"
+        tests_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "harness_change.py").write_text(
+            "print('change v1')\n", encoding="utf-8"
+        )
+        (tests_dir / "test_harness_change.py").write_text(
+            "import unittest\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_ok(self):\n"
+            "        self.assertTrue(True)\n",
+            encoding="utf-8",
+        )
+        self._git("add", "-A")
+        self._git("commit", "-m", "add harness python")
+        self._begin("python-targeted")
+        (scripts_dir / "harness_change.py").write_text(
+            "print('change v2')\n", encoding="utf-8"
+        )
+        executed: list[list[str]] = []
+        original = ht.htr.run_managed_command
+
+        def capturing_run(argv, **kwargs):
+            executed.append(list(argv))
+            return original(argv, **kwargs)
+
+        try:
+            ht.htr.run_managed_command = capturing_run
+            rc, out = self._finish("python-targeted")
+        finally:
+            ht.htr.run_managed_command = original
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "standard")
+        # 2 次执行：compile/unitTestFull 去重后 1 次 + 定向 python 1 次。
+        self.assertEqual(len(executed), 2, executed)
+        targeted = [a for a in executed if "-m" in a and "unittest" in a]
+        self.assertEqual(len(targeted), 1)
+        self.assertIn("test_harness_change", targeted[0])
+        by_name = {v["verification"]: v for v in out["verifications"]}
+        self.assertEqual(by_name["unitTest"]["reason"], "python-targeted")
+        # ledger：unitTest（定向，显式 files）+ unitTestFull（回退链）。
+        ledger = self._ledger(Path(out["archiveDir"]))
+        self.assertEqual(
+            sorted(ledger["validations"]), ["unitTest", "unitTestFull"]
+        )
+        entry = ledger["validations"]["unitTest"]
+        self.assertEqual(entry["status"], "OK")
+        self.assertIn(
+            "harness/scripts/harness_change.py", entry.get("inputsFiles") or []
+        )
+        self.assertIn(
+            "harness/scripts/tests/test_harness_change.py",
+            entry.get("inputsFiles") or [],
+        )
+
+    def test_p6_unmapped_python_file_keeps_fallback(self) -> None:
+        """P6 边界：无映射命中的 Python 文件 → 保持回退链（含 P5 去重）。"""
+        scripts_dir = self.project / "harness" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "harness_unknown.py").write_text("x = 1\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-m", "add unknown script")
+        self._begin("unmapped-python")
+        (scripts_dir / "harness_unknown.py").write_text("x = 2\n", encoding="utf-8")
+        rc, out = self._finish("unmapped-python")
+        self.assertEqual(rc, 0, out)
+        by_name = {v["verification"]: v for v in out["verifications"]}
+        # unitTest 无定向命中 → 回退解析到 unitTestFull，与 compile 同
+        # argv → P5 去重（DEDUPED），不执行定向命令。
+        self.assertEqual(by_name["unitTest"]["status"], "DEDUPED")
+        self.assertEqual(by_name["unitTest"]["resolvedAs"], "unitTestFull")
+        ledger = self._ledger(Path(out["archiveDir"]))
+        self.assertEqual(sorted(ledger["validations"]), ["unitTestFull"])
+
+    def test_p6_explicit_mapping_table_multi_modules(self) -> None:
+        """P6 映射表：harness_archive.py → 4 个测试模块一次跑齐。"""
+        modules = ht._python_test_modules_for_paths(
+            ["harness/scripts/harness_archive.py"], self.project
+        )
+        self.assertEqual(
+            modules,
+            [
+                "test_harness_archive",
+                "test_harness_archive_c",
+                "test_harness_archive_preflight",
+                "test_harness_archive_remote",
+            ],
+        )
+        # 约定派生：无显式表条目但测试文件存在 → test_harness_X。
+        tests_dir = self.project / "harness" / "scripts" / "tests"
+        tests_dir.mkdir(parents=True, exist_ok=True)
+        (tests_dir / "test_harness_change.py").write_text("", encoding="utf-8")
+        self.assertEqual(
+            ht._python_test_modules_for_paths(
+                ["harness/scripts/harness_change.py"], self.project
+            ),
+            ["test_harness_change"],
+        )
+        # 测试文件自身变更 → 直接映射到该模块。
+        self.assertEqual(
+            ht._python_test_modules_for_paths(
+                ["harness/scripts/tests/test_harness_gate.py"], self.project
+            ),
+            ["test_harness_gate"],
+        )
+
+
 class StatusTests(HarnessTaskFixture):
     def test_status_reports_open_task(self) -> None:
         self._begin("status-check")

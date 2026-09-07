@@ -8,7 +8,9 @@ plan-evidence-input.json。设计约束（2026-09-07 批次 0 基线）：
   full 信号（auth/security/migration/concurrency/artifact-protocol/
   shared-state/delete）→ 拒绝并转介 /harness-plan 完整流程。
 - 验证不接受模型口述通过：命令从 build-profile verificationGraph
-  解析，经本脚本执行，结果写 verification-ledger（提案 §4.6）。
+  解析或按变更定向选择（P1 docs-only→doc contract、P6 harness
+  Python→定向 unittest、P5 同 argv 去重），经本脚本执行，结果写
+  verification-ledger（提案 §4.6）。
 - 错误信封带 code + field_path + problems[] + recoveryAction（直击
   F3：无 field_path 排障 25 min）。
 
@@ -83,6 +85,36 @@ VALIDATION_FALLBACK = {
     "unitTest": ("unitTestFull",),
     "compile": ("unitTest", "unitTestFull"),
 }
+# doc contract 测试的扫描范围（与 test_harness_doc_contract.py:23-26 的
+# DOC_DIRS/DOC_NAMES 一致）：harness/protocols/*.md + harness/harness-*/
+# 下的 SKILL.md/reference.md/checklist.md。docs-only 且命中此范围的
+# 变更用 doc contract 测试替代回退链（P1）；范围外的 docs-only（如根
+# README.md）保持回退——doc contract 覆盖不到，跑了不构成证据。
+DOC_CONTRACT_DIRS = ("harness/protocols",)
+DOC_CONTRACT_SKILL_PREFIX = "harness/harness-"
+DOC_CONTRACT_NAMES = ("SKILL.md", "reference.md", "checklist.md")
+# harness Python 源 → 测试模块的显式补充表（与
+# scripts/changed-test-selection.mjs:101-134 的 PYTHON_TESTS_BY_PATH 对齐；
+# 多测试映射的源必须显式列出，约定派生只覆盖单测试情形）。
+PYTHON_TEST_MODULES_BY_SOURCE = {
+    "harness/scripts/harness_archive.py": (
+        "test_harness_archive",
+        "test_harness_archive_c",
+        "test_harness_archive_preflight",
+        "test_harness_archive_remote",
+    ),
+    "harness/scripts/harness_gate.py": (
+        "test_harness_gate",
+        "test_harness_gate_severity",
+    ),
+    "harness/scripts/harness_ledger.py": (
+        "test_harness_ledger",
+        "test_harness_ledger_targets",
+        "test_harness_ledger_v3",
+    ),
+}
+PYTHON_SOURCE_PREFIX = "harness/scripts/harness_"
+PYTHON_TEST_PREFIX = "harness/scripts/tests/test_"
 CHANGE_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
@@ -525,6 +557,156 @@ def _resolve_verification_argv(
     return verification, None
 
 
+def _doc_contract_scope_paths(product_paths: list[str]) -> list[str]:
+    """product_paths 中落在 doc contract 测试扫描范围内的子集（P1）。
+
+    范围 = harness/protocols/<name>.md + harness/harness-*/{SKILL,reference,
+    checklist}.md（与 test_harness_doc_contract.py 的 DOC_DIRS/DOC_NAMES
+    一致）。范围外的 docs-only 变更保持回退链。
+    """
+    scoped: list[str] = []
+    for path in product_paths:
+        normalized = path.replace("\\", "/")
+        if any(
+            normalized.startswith(f"{prefix}/") and normalized.endswith(".md")
+            for prefix in DOC_CONTRACT_DIRS
+        ):
+            scoped.append(normalized)
+            continue
+        name = normalized.rsplit("/", 1)[-1]
+        if (
+            name in DOC_CONTRACT_NAMES
+            and normalized.startswith(DOC_CONTRACT_SKILL_PREFIX)
+            and normalized.count("/") == 2
+        ):
+            scoped.append(normalized)
+    return sorted(set(scoped))
+
+
+def _python_test_modules_for_paths(
+    product_paths: list[str], project: Path
+) -> list[str]:
+    """变更路径 → 定向 Python unittest 模块名（P6）。
+
+    映射规则（与 scripts/changed-test-selection.mjs 对齐）：
+    1. 变更本身是 harness/scripts/tests/test_X.py → 模块 test_X
+    2. 显式补充表（多测试映射：archive/gate/ledger）
+    3. 约定派生：harness/scripts/harness_X.py → test_harness_X（存在才用）
+    无命中 → 空列表（调用方保持回退链）。
+    """
+    tests_dir = project / "harness" / "scripts" / "tests"
+    modules: set[str] = set()
+    for path in product_paths:
+        normalized = path.replace("\\", "/")
+        if normalized.startswith(PYTHON_TEST_PREFIX) and normalized.endswith(".py"):
+            modules.add(Path(normalized).stem)
+            continue
+        if not normalized.startswith(PYTHON_SOURCE_PREFIX):
+            continue
+        if normalized in PYTHON_TEST_MODULES_BY_SOURCE:
+            modules.update(PYTHON_TEST_MODULES_BY_SOURCE[normalized])
+            continue
+        derived = "test_" + Path(normalized).stem
+        if (tests_dir / f"{derived}.py").is_file():
+            modules.add(derived)
+    return sorted(modules)
+
+
+def _plan_verifications(
+    tier: str,
+    signals: list[str],
+    product_paths: list[str],
+    project: Path,
+) -> list[dict[str, Any]]:
+    """变更感知的验证计划（P1/P5/P6）。
+
+    输入：档位验证序列（TIER_VALIDATIONS）+ classify signals + 产品路径。
+    输出：有序计划项 [{name, argv, resolvedAs, reason, profile_input,
+    files, cwd}]。规则：
+    - P5：按 resolved argv 元组去重——三项全解析到同一 argv 时只保留
+      首个可执行项，去重项标 dedupedFrom（不执行、不重复记 ledger）。
+    - P1：docs-only 且命中 doc contract 扫描范围 → unitTest 项替换为
+      doc contract 测试（~1s，对照回退链 npm 全链 ~260s）。
+    - P6：harness Python 源/测试变更 → unitTest 项替换为定向 unittest
+      （~5s）；compile/unitTestFull 不替换（编译面+全量回归本就该跑
+      全链），但受 P5 去重约束。
+    """
+    plan: list[dict[str, Any]] = []
+    seen_argv: dict[tuple[str, ...], str] = {}
+    doc_scoped = _doc_contract_scope_paths(product_paths)
+    python_modules = _python_test_modules_for_paths(product_paths, project)
+    tests_dir = project / "harness" / "scripts" / "tests"
+
+    for verification in TIER_VALIDATIONS[tier]:
+        item: dict[str, Any] = {
+            "name": verification,
+            "argv": None,
+            "resolvedAs": verification,
+            "reason": "fallback",
+            "profile_input": verification,
+            "files": None,
+            "cwd": None,
+        }
+        targeted = False
+        if verification == "unitTest" and "docs-only" in signals and doc_scoped:
+            # P1：doc contract 测试覆盖全部被改文档的 CLI 引用契约。
+            item["argv"] = [sys.executable, "-m", "unittest", "test_harness_doc_contract"]
+            item["resolvedAs"] = "unitTest"
+            item["reason"] = "doc-contract"
+            item["profile_input"] = None
+            item["files"] = sorted(set(doc_scoped))
+            item["cwd"] = tests_dir
+            targeted = True
+        elif verification == "unitTest" and python_modules:
+            # P6：定向 unittest 只测变更相关的测试模块。
+            item["argv"] = [sys.executable, "-m", "unittest", *python_modules]
+            item["resolvedAs"] = "unitTest"
+            item["reason"] = "python-targeted"
+            item["profile_input"] = None
+            item["files"] = sorted(
+                set(product_paths)
+                | {
+                    f"harness/scripts/tests/{module}.py"
+                    for module in python_modules
+                }
+            )
+            item["cwd"] = tests_dir
+            targeted = True
+        if not targeted:
+            resolved_name, argv = _resolve_verification_argv(project, verification)
+            item["resolvedAs"] = resolved_name
+            item["argv"] = argv
+            # ledger 的 profile-input 键用 resolved 名（verificationInputs
+            # 只有真实 target 的键；名义名会触发 profile 刷新误报）。
+            item["profile_input"] = resolved_name
+            if argv is None:
+                # 无可执行 target：保留占位项，_run_verification 报
+                # VERIFICATION_TARGET_MISSING（现状语义不变）。
+                plan.append(item)
+                continue
+
+        argv_key = tuple(item["argv"] or [])
+        if argv_key and argv_key in seen_argv:
+            # P5：同一 argv 已在计划中——去重，不重复执行/记账。
+            plan.append(
+                {
+                    "name": verification,
+                    "argv": None,
+                    "resolvedAs": item["resolvedAs"],
+                    "reason": "deduped",
+                    "dedupedFrom": seen_argv[argv_key],
+                    "profile_input": None,
+                    "files": None,
+                    "cwd": None,
+                }
+            )
+            continue
+        if argv_key:
+            seen_argv[argv_key] = verification
+        plan.append(item)
+    return plan
+
+
 def _split_shell_chain(argv: list[str]) -> list[list[str]]:
     """把 argvTemplate 里的 `&&` 链拆成顺序段（不引入 shell）。
 
@@ -548,16 +730,21 @@ def _split_shell_chain(argv: list[str]) -> list[list[str]]:
 
 
 def _run_verification(
-    project: Path, change_dir: Path, verification: str
+    project: Path, change_dir: Path, item: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """执行一项验证并写 ledger；返回 (summary, error_envelope|None)。
+    """执行一项验证计划项并写 ledger；返回 (summary, error_envelope|None)。
 
-    回退时 ledger 记录真实执行的验证名（如 unitTestFull），缺失项不伪造。
+    item 来自 _plan_verifications：{name, argv, resolvedAs, reason,
+    profile_input, files, cwd}。回退项 ledger 记录真实执行的验证名
+    （如 unitTestFull），缺失项不伪造；定向项（doc-contract /
+    python-targeted）以 unitTest + 显式 files 记账（derive_coverage →
+    "incremental"，恰是定向测试的真实覆盖语义）。
     执行走 harness_test_runner.run_managed_command（PATH/PATHEXT 解析 +
     进程树隔离 + 超时），与 test_runner exec 同一安全面。
     """
-    resolved_name, argv = _resolve_verification_argv(project, verification)
-    if argv is None:
+    verification = str(item["name"])
+    argv = item.get("argv")
+    if not argv:
         return {}, error_envelope(
             "VERIFICATION_TARGET_MISSING",
             f"build-profile 未声明验证目标 {verification}（含回退链）",
@@ -582,7 +769,7 @@ def _run_verification(
         try:
             result = htr.run_managed_command(
                 segment,
-                cwd=project,
+                cwd=Path(item["cwd"]) if item.get("cwd") else project,
                 timeout_seconds=1800,
                 capture_output=True,
             )
@@ -613,25 +800,30 @@ def _run_verification(
     record_error = _record_ledger_entry(
         project=project,
         change_dir=change_dir,
-        verification=resolved_name,
+        verification=str(item.get("resolvedAs") or verification),
         status=status,
         command=" ".join(argv),
         exit_code=exit_code,
         duration_ms=duration_ms,
         evidence=evidence_rel,
+        profile_input=item.get("profile_input"),
+        files=item.get("files"),
     )
     if record_error is not None:
         return {}, record_error
 
     summary = {
         "verification": verification,
-        "resolvedAs": resolved_name,
+        "resolvedAs": item.get("resolvedAs") or verification,
         "status": status,
         "exitCode": exit_code,
         "durationMs": duration_ms,
         "evidence": evidence_rel,
         "command": " ".join(argv),
+        "reason": item.get("reason") or "fallback",
     }
+    if item.get("dedupedFrom"):
+        summary["dedupedFrom"] = item["dedupedFrom"]
     return summary, None
 
 
@@ -645,11 +837,18 @@ def _record_ledger_entry(
     exit_code: int,
     duration_ms: int,
     evidence: str,
+    profile_input: str | None = None,
+    files: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """cmd_record 等价逻辑（profile-input 展开 + 迁移 + 写入）。
 
     不走 subprocess 是为了复用 hl 的进程内缓存与错误信封；参数与
-    harness_ledger.py record 子命令一一对应。
+    harness_ledger.py record 子命令一一对应。定向项（P1/P6）传
+    profile_input=None + files=<变更源+测试文件>：显式 --files 路径，
+    inputsHash/inputsFiles 从显式文件算，derive_coverage("unitTest",
+    None)→"incremental"。不用 unitTestFull 的 profile 输入集给定向项
+    记账——输入集声称覆盖全部 harness/scripts/*.py 而实际只测了部分，
+    正是 harness_ledger.py:2703-2705 反对的假证据。
     """
     args = argparse.Namespace(
         change_dir=str(change_dir),
@@ -659,11 +858,11 @@ def _record_ledger_entry(
         runner_command=None,
         exit_code=exit_code,
         duration_ms=duration_ms,
-        files=None,
+        files=",".join(files) if files else None,
         files_from=None,
         evidence=evidence,
         project=str(project),
-        profile_input=verification,
+        profile_input=profile_input,
         scope=None,
         coverage=None,
         toolchain_hash=None,
@@ -1010,11 +1209,23 @@ def cmd_finish(args: argparse.Namespace) -> int:
 
     verifications: list[dict[str, Any]] = []
     if closure == "completed":
-        # ④ 跑档位验证 + ⑤ 写 ledger
-        for verification in TIER_VALIDATIONS[tier]:
-            summary, verify_error = _run_verification(
-                project, change_dir, verification
-            )
+        # ④ 变更感知验证计划（P1/P5/P6）+ ⑤ 逐项执行写 ledger
+        signals = [str(s) for s in (classification.get("signals") or [])]
+        plan = _plan_verifications(tier, signals, product_paths, project)
+        for item in plan:
+            if item.get("reason") == "deduped":
+                # P5：同一 argv 已执行——名义项保留在摘要，不重复执行/记账。
+                verifications.append(
+                    {
+                        "verification": item["name"],
+                        "resolvedAs": item.get("resolvedAs") or item["name"],
+                        "status": "DEDUPED",
+                        "durationMs": 0,
+                        "dedupedFrom": item.get("dedupedFrom"),
+                    }
+                )
+                continue
+            summary, verify_error = _run_verification(project, change_dir, item)
             if verify_error is not None:
                 emit(verify_error, as_json)
                 return 2
@@ -1023,8 +1234,8 @@ def cmd_finish(args: argparse.Namespace) -> int:
                 emit(
                     error_envelope(
                         "VERIFICATION_FAILED",
-                        f"验证 {verification} 失败（exit {summary['exitCode']}）",
-                        field_path=f"validations.{verification}",
+                        f"验证 {item['name']} 失败（exit {summary['exitCode']}）",
+                        field_path=f"validations.{item['name']}",
                         problems=[f"evidence: {summary['evidence']}"],
                         recovery_action=(
                             "修复失败后重跑 "

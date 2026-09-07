@@ -35,6 +35,29 @@ harness_task.py status --project . --change <cn> --json
 - 归档失败重跑时产品树已提交（classify 只见 no-code-diff），档位沿用
   task.json 里上次裁决的记录，不降级。
 
+## 验证计划（P1/P5/P6，变更感知选择）
+
+finish 在执行前先生成验证计划（`_plan_verifications`），摘要项带
+`reason` 字段供审计：
+
+| reason | 含义 | ledger 记账 |
+|--------|------|-------------|
+| fallback | 按回退链解析 build-profile target | verification=resolvedAs，profile-input=resolvedAs |
+| doc-contract | docs-only 且变更命中 doc contract 扫描范围（`harness/protocols/*.md`、`harness/harness-*/{SKILL,reference,checklist}.md`）→ unitTest 项替换为 `python -m unittest test_harness_doc_contract`（~1s） | verification=unitTest，显式 files=被改文档 |
+| python-targeted | 变更含 `harness/scripts/harness_*.py` 或 `tests/test_*.py` → unitTest 项替换为定向 `python -m unittest <模块...>`（~5s；源→测试映射与 scripts/changed-test-selection.mjs 对齐） | verification=unitTest，显式 files=变更源+测试文件 |
+| deduped | 与前项解析到同一 argv（P5）→ 不执行不记账，摘要标 `dedupedFrom` | 无（首个可执行项已覆盖） |
+
+- P5 去重按 resolved argv 元组：三项全落同一 target 时只执行 1 次
+  （对照试点 3×240s → 1×240s）。
+- compile/unitTestFull 不做定向替换（编译面+全量回归本就该跑全链），
+  但受 P5 去重约束。
+- docs-only 但不在 doc contract 扫描范围（如根 README.md）→ 保持回退
+  （doc contract 覆盖不到，跑了不构成证据）。
+- 定向项不用 unitTestFull 的 profile 输入集记账——输入集声称覆盖全部
+  harness/scripts/*.py 而实际只测了部分，是假证据；显式 files 路径下
+  derive_coverage("unitTest", None)→"incremental" 恰是定向测试的真实
+  覆盖语义。
+
 ## 错误码表
 
 | code | 含义 | recoveryAction |
@@ -64,8 +87,10 @@ harness_task.py status --project . --change <cn> --json
 3. 声明 ownership.productPaths（classify 的 productPaths + 契约外
    产品树脏路径）
 4. 写 gate-policy（plannedPhases=["task","archive"]）
-5. 跑档位验证（回退链解析 argv）
-6. 每项验证写 ledger（evidence 落 `evidence/<key>-<ts>.log`）
+5. 生成验证计划（P1/P5/P6：doc-contract / python-targeted 定向替换 +
+   同 argv 去重；见「验证计划」节）
+6. 逐项执行计划并写 ledger（evidence 落 `evidence/<key>-<ts>.log`；
+   deduped 项跳过执行与记账）
 7. 生成 `plans/<cn>-plan.md`（目标:/风险等级:/## Tasks 契约行）
 8. 刷新 state snapshot
 9. git add -A + commit（不 push）
