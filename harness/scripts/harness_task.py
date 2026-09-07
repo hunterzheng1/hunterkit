@@ -49,6 +49,7 @@ import harness_gate as hg  # noqa: E402
 import harness_ledger as hl  # noqa: E402
 import harness_profile as hp  # noqa: E402
 import harness_state as hs  # noqa: E402
+import harness_test_runner as htr  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -524,12 +525,36 @@ def _resolve_verification_argv(
     return verification, None
 
 
+def _split_shell_chain(argv: list[str]) -> list[list[str]]:
+    """把 argvTemplate 里的 `&&` 链拆成顺序段（不引入 shell）。
+
+    node 探测的 profile 会给 `npm run lint && npm test` 这类 shell 命令串
+    拆出的 argvTemplate（['npm','run','lint','&&','npm','test']）——
+    validate_managed_argv 对批处理参数里的命令解释符 fail-closed，
+    轻任务按 `&&` 边界拆段顺序执行，语义等价且无 shell 注入面。
+    """
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for token in argv:
+        if token == "&&":
+            if current:
+                segments.append(current)
+            current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments or [argv]
+
+
 def _run_verification(
     project: Path, change_dir: Path, verification: str
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """执行一项验证并写 ledger；返回 (summary, error_envelope|None)。
 
     回退时 ledger 记录真实执行的验证名（如 unitTestFull），缺失项不伪造。
+    执行走 harness_test_runner.run_managed_command（PATH/PATHEXT 解析 +
+    进程树隔离 + 超时），与 test_runner exec 同一安全面。
     """
     resolved_name, argv = _resolve_verification_argv(project, verification)
     if argv is None:
@@ -549,32 +574,49 @@ def _run_verification(
     evidence_rel = f"evidence/{verification}-{stamp}.log"
     evidence_path = change_dir / evidence_rel
 
+    segments = _split_shell_chain(argv)
     started = time.perf_counter()
-    proc = subprocess.run(
-        argv,
-        cwd=project,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    exit_code = 0
+    log_parts: list[str] = [f"$ {' '.join(argv)}"]
+    for index, segment in enumerate(segments):
+        try:
+            result = htr.run_managed_command(
+                segment,
+                cwd=project,
+                timeout_seconds=1800,
+                capture_output=True,
+            )
+            segment_exit = 1 if result.timed_out else result.returncode
+            output_tail = result.output_tail or ""
+        except (htr.ManagedCommandNotFound, htr.ManagedCommandUnsafe) as exc:
+            return {}, error_envelope(
+                "VERIFICATION_COMMAND_UNRESOLVED",
+                f"验证命令无法安全执行：{exc}",
+                field_path=f"verificationGraph.targets.{verification}.argvTemplate",
+                recovery_action=(
+                    "检查 build-profile 的 argvTemplate；含 shell 解释符的"
+                    "命令串需拆成单命令或改用原生可执行文件"
+                ),
+            )
+        log_parts.append(
+            f"[segment {index + 1}/{len(segments)}] $ {' '.join(segment)}\n"
+            f"exit={segment_exit}\n{output_tail}\n"
+        )
+        if segment_exit != 0:
+            exit_code = segment_exit
+            break  # && 语义：前段失败后段不执行
     duration_ms = max(0, int(round((time.perf_counter() - started) * 1000)))
-    log_text = (
-        f"$ {' '.join(argv)}\n"
-        f"exit={proc.returncode}\n"
-        f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}\n"
-    )
+    log_text = f"exit={exit_code}\n" + "\n".join(log_parts) + "\n"
     evidence_path.write_text(log_text, encoding="utf-8", newline="\n")
 
-    status = "OK" if proc.returncode == 0 else "FAIL"
+    status = "OK" if exit_code == 0 else "FAIL"
     record_error = _record_ledger_entry(
         project=project,
         change_dir=change_dir,
         verification=resolved_name,
         status=status,
         command=" ".join(argv),
-        exit_code=proc.returncode,
+        exit_code=exit_code,
         duration_ms=duration_ms,
         evidence=evidence_rel,
     )
@@ -585,7 +627,7 @@ def _run_verification(
         "verification": verification,
         "resolvedAs": resolved_name,
         "status": status,
-        "exitCode": proc.returncode,
+        "exitCode": exit_code,
         "durationMs": duration_ms,
         "evidence": evidence_rel,
         "command": " ".join(argv),
