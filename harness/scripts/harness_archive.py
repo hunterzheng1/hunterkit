@@ -2473,6 +2473,37 @@ def persist_execute_result(archive_dir: Path, payload: dict[str, Any]) -> dict[s
     return {"ok": True, "path": str(path)}
 
 
+def persist_archive_receipt(
+    archive_dir: Path,
+    *,
+    change_name: str,
+    summary_path: Path,
+) -> dict[str, Any]:
+    """把 meta/archive-receipt.json 写进归档目录，供 change status/cleanup 消费。
+
+    `_verified_archive_receipts`（harness_change.py）自 a664ac7 起读取该回执并按
+    summarySha256 校验归档残留，但一直没有写入方——回执必须在此处（durability
+    回写之后、summary 定稿之后）落盘，哈希才可长期校验。
+    """
+    archive_dir = archive_dir.expanduser().resolve()
+    path = archive_dir / "meta" / "archive-receipt.json"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json(
+            path,
+            {
+                "schemaVersion": 1,
+                "status": "archived",
+                "changeName": change_name,
+                "summarySha256": sha256_file(summary_path),
+                "recordedAt": now_iso(),
+            },
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return {"ok": False, "reasonCode": "ARCHIVE_RECEIPT_WRITE_FAILED", "error": str(exc)}
+    return {"ok": True, "path": str(path)}
+
+
 def publication_member_paths(source_dir: Path) -> list[str]:
     """归档包会包含哪些文件——由 `_archive_core_file_specs` 单一定义，不另起一套。
 
@@ -9078,6 +9109,17 @@ def cmd_finalize(
         )
     except OSError as exc:
         warnings.append(f"could not persist completed archive operation: {exc}")
+
+    # 归档回执：durability 回写已完成，summary 定稿，此时哈希可长期校验。
+    receipt_result = persist_archive_receipt(
+        archive_dir,
+        change_name=change_name,
+        summary_path=summary_path,
+    )
+    if not receipt_result.get("ok"):
+        warnings.append(
+            f"could not persist archive receipt: {receipt_result.get('error')}"
+        )
 
     payload["ok"] = True
     payload["finalStatus"] = "OK"

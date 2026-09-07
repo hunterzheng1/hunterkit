@@ -218,6 +218,34 @@ class HarnessChangeTests(unittest.TestCase):
         self.assertTrue((self.changes / "alpha").is_dir())
         self.assertNotIn("beta", result["eligible"])
 
+    def test_archive_execute_receipt_writer_round_trips_reader(self) -> None:
+        """生产写入方 persist_archive_receipt 产出的回执必须能被
+        _verified_archive_receipts 校验通过（此前读取方自 a664ac7 起无写入方）。"""
+        archive = load_module("harness_archive", "harness_archive.py")
+        archive_dir = self.project / ".harness" / "archive" / "2026-09-07-alpha"
+        summary = archive_dir / "reports" / "final" / "summary-data.json"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(
+            json.dumps({"changeName": "alpha", "finalStatus": "OK"}),
+            encoding="utf-8",
+        )
+
+        result = archive.persist_archive_receipt(
+            archive_dir,
+            change_name="alpha",
+            summary_path=summary,
+        )
+
+        self.assertTrue(result.get("ok"), result)
+        receipt_path = archive_dir / "meta" / "archive-receipt.json"
+        self.assertTrue(receipt_path.is_file())
+        receipts = change._verified_archive_receipts(self.project)
+        self.assertIn("alpha", receipts)
+        self.assertTrue(receipts["alpha"]["verified"])
+        self.assertEqual(
+            receipts["alpha"]["receiptPath"], str(receipt_path.resolve())
+        )
+
     def test_claim_conflict_same_change_ut019(self) -> None:
         first = change.claim_lease(
             self.project,
