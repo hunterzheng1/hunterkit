@@ -6,7 +6,7 @@ plan-evidence-input.json。设计约束（2026-09-07 批次 0 基线）：
 
 - 只接受 fast + standard 档（docs/config + 普通功能 + 局部缺陷修复）；
   full 信号（auth/security/migration/concurrency/artifact-protocol/
-  shared-state/delete）→ 拒绝并转介 /harness-plan 完整流程。
+  shared-state/delete/contract-schema）→ 拒绝并转介 /harness-plan 完整流程。
 - 验证不接受模型口述通过：命令从 build-profile verificationGraph
   解析或按变更定向选择（P1 docs-only→doc contract、P6 harness
   Python→定向 unittest、P5 同 argv 去重），经本脚本执行，结果写
@@ -72,7 +72,11 @@ FULL_MARKERS = (
     "artifact-protocol",
     "shared-state",
     "delete",
+    "contract-schema",
 )
+# 档位严格度排序：begin --tier 声明的下限（floor）语义用——声明的档位
+# 比 finish 裁决更高时抬升裁决，反之不压低（classify 信号升级仍生效）。
+TIER_RANK = {"fast": 0, "standard": 1, "full": 2}
 # 档位 → 验证序列（与 workflow-policy riskTiers.requiredValidations 对齐）。
 TIER_VALIDATIONS = {
     "fast": ("unitTest",),
@@ -335,6 +339,7 @@ def cmd_begin(args: argparse.Namespace) -> int:
     goal = str(args.goal or "").strip()
     acceptance = [str(item).strip() for item in (args.acceptance or []) if str(item).strip()]
     executor = str(args.executor or "").strip() or "unknown"
+    declared_tier = str(args.tier) if getattr(args, "tier", None) else None
 
     problems: list[str] = []
     if not change:
@@ -395,6 +400,44 @@ def cmd_begin(args: argparse.Namespace) -> int:
         )
         return 2
 
+    # --tier full：轻任务入口不承接 full 档工作，立即拒绝且不建 change
+    # 目录（无孤儿目录）。P12 修复：显式声明也必须走 /harness-plan。
+    if declared_tier == "full":
+        emit(
+            error_envelope(
+                "TASK_TIER_UPGRADE_REQUIRED",
+                "--tier full 超出轻任务入口承接范围——契约/schema 邻接或"
+                "高风险变更请走 /harness-plan 完整流程",
+                field_path="args.tier",
+                recovery_action=(
+                    "/harness-plan（完整五阶段流程：plan→execute→review→"
+                    "submit→archive）"
+                ),
+            ),
+            as_json,
+        )
+        return 3
+
+    # 重声明冲突守卫：同一 change 不得改口声明档位（防止事后降级声明）。
+    if (
+        existing_task is not None
+        and declared_tier is not None
+        and existing_task.get("declaredTier") not in (None, declared_tier)
+    ):
+        emit(
+            error_envelope(
+                "TASK_INPUT_INVALID",
+                f"change {change} 已声明档位 "
+                f"{existing_task.get('declaredTier')!r}，不得改口为 {declared_tier!r}",
+                field_path="args.tier",
+                recovery_action=(
+                    f"harness_task.py status --project . --change {change} --json"
+                ),
+            ),
+            as_json,
+        )
+        return 2
+
     created = not change_dir.is_dir()
     if created:
         (change_dir / "meta").mkdir(parents=True, exist_ok=True)
@@ -428,6 +471,8 @@ def cmd_begin(args: argparse.Namespace) -> int:
             "executor": executor,
             "status": "open",
             "tier": None,
+            # begin --tier 声明的档位下限；tier 仍是 finish 裁决值。
+            "declaredTier": declared_tier,
             "createdAt": now_iso(),
             "finishedAt": None,
             # begin 时刻脏树基线：finish 的外来路径检测基准（非循环）。
@@ -436,6 +481,11 @@ def cmd_begin(args: argparse.Namespace) -> int:
         write_json_file(change_dir / TASK_REL, task_doc)
     else:
         task_doc = existing_task
+        # 既有任务补声明：之前 begin 未带 --tier，现在带了 → 补写
+        # （同值幂等；不同值已被上面的冲突守卫拒绝）。
+        if declared_tier is not None and task_doc.get("declaredTier") is None:
+            task_doc["declaredTier"] = declared_tier
+            write_json_file(change_dir / TASK_REL, task_doc)
 
     # phase.start 幂等：已有未关闭的 task phase.start 则复用，不重复追加。
     # attempt 不硬编码：append_with_auto_seal 自动取 phase 内最大 attempt+1
@@ -492,6 +542,7 @@ def cmd_begin(args: argparse.Namespace) -> int:
             "runId": run_id,
             "goal": task_doc.get("goal"),
             "acceptance": task_doc.get("acceptance"),
+            "declaredTier": task_doc.get("declaredTier"),
             "changeBase": git_state.get("base"),
             "head": git_state.get("head"),
             "nextAction": (
@@ -1091,6 +1142,24 @@ def cmd_finish(args: argparse.Namespace) -> int:
     classification = hg.classify_risk(change_dir, "post-run", workflow=workflow)
 
     # ② 档位裁决：full 信号 / 外来脏路径 → 拒绝
+    #    纵深防御：手改 task.json declaredTier 为 full（绕过 begin 拒绝）
+    #    → 同样拒绝。begin --tier choices 已挡非法值，这里只防手改。
+    declared_tier = task.get("declaredTier")
+    if declared_tier is not None and declared_tier not in ACCEPTED_TIERS:
+        emit(
+            error_envelope(
+                "TASK_TIER_UPGRADE_REQUIRED",
+                f"task.json declaredTier={declared_tier!r} 非法（轻任务入口只接受"
+                " fast/standard 声明；full 请走 /harness-plan 完整流程）",
+                field_path="meta/task.json.declaredTier",
+                recovery_action=(
+                    "修正 meta/task.json 的 declaredTier，或改用 /harness-plan"
+                    " 完整流程"
+                ),
+            ),
+            as_json,
+        )
+        return 3
     #    外来检测双通道（互补，缺一必有盲区）：
     #    a) begin 脏树基线（task.json.dirtyBaseline）：begin 前就脏且内容
     #       未变 → 任务从未触碰，git add -A 会误扫进提交。首跑时 classify
@@ -1167,6 +1236,15 @@ def cmd_finish(args: argparse.Namespace) -> int:
         and "no-code-diff" in [str(s) for s in (classification.get("signals") or [])]
     ):
         tier = recorded_tier
+
+    # 声明档位下限（floor）：begin --tier 声明的档位比裁决高时抬升裁决，
+    # 反之不压低——classify 信号升级（该拒还拒）不受声明影响。与上面的
+    # recorded_tier 保留机制并行，任意顺序组合无冲突。
+    if (
+        declared_tier in ACCEPTED_TIERS
+        and TIER_RANK[declared_tier] > TIER_RANK[tier]
+    ):
+        tier = declared_tier
 
     # ②b 声明产品所有权：classify 的 productPaths 即本次 diff 的产品路径。
     #     不声明则归档把全部改动判 foreignPaths → DIFF_ZERO_WITH_NONEMPTY_COMMIT
@@ -1536,6 +1614,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "goal": task.get("goal"),
             "acceptance": task.get("acceptance"),
             "tier": task.get("tier"),
+            "declaredTier": task.get("declaredTier"),
             "recordedVerifications": recorded,
             "uncommittedPaths": dirty_paths,
             "commit": task.get("commit"),
@@ -1568,6 +1647,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         required=True,
         help="可验证验收条件；可重复",
+    )
+    p_begin.add_argument(
+        "--tier",
+        choices=("fast", "standard", "full"),
+        default=None,
+        help="声明档位下限；full 直接拒绝（转 /harness-plan 完整流程）",
     )
     p_begin.add_argument("--json", action="store_true")
     p_begin.set_defaults(func=cmd_begin)

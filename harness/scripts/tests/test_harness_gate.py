@@ -465,6 +465,40 @@ class HarnessGateTests(unittest.TestCase):
         self.assertEqual(result["tier"], "fast")
         self.assertEqual(result["signals"], ["docs-only"])
 
+    def test_post_run_contract_schema_file_change_is_full(self) -> None:
+        # P12：契约文件（输出 schema 被跨语言消费）变更必须升 full——
+        # 路径 marker 启发式识别不了 schema 语义（T4/T5 两个数据点）。
+        plans = self.change_dir / "plans"
+        plans.mkdir(parents=True, exist_ok=True)
+        (plans / "demo-plan.md").write_text("risk: fast\n", encoding="utf-8")
+        source = self.project / "harness" / "scripts" / "harness_change.py"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("# contract schema change\n", encoding="utf-8")
+        result = gate.classify_risk(self.change_dir, "post-run")
+        self.assertEqual(result["tier"], "full")
+        self.assertIn("contract-schema", result["signals"])
+        persisted = json.loads(
+            (self.change_dir / "meta" / "risk-classification.json").read_text("utf-8")
+        )
+        self.assertEqual(persisted["tier"], "full")
+        self.assertIn("contract-schema", persisted["signals"])
+
+    def test_post_run_contract_schema_exact_path_no_false_positive(self) -> None:
+        # 精确匹配是承重墙：子串规则会误报 test_harness_change.py。
+        # 纯测试文件变更保持 standard，不触发 contract-schema。
+        plans = self.change_dir / "plans"
+        plans.mkdir(parents=True, exist_ok=True)
+        (plans / "demo-plan.md").write_text("risk: fast\n", encoding="utf-8")
+        test_file = (
+            self.project / "harness" / "scripts" / "tests" / "test_harness_change.py"
+        )
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("# test only\n", encoding="utf-8")
+        result = gate.classify_risk(self.change_dir, "post-run")
+        self.assertEqual(result["tier"], "standard")
+        self.assertNotIn("contract-schema", result["signals"])
+        self.assertIn("production-code", result["signals"])
+
     def test_post_run_harness_upgrade_is_reported_as_maintenance_only(self) -> None:
         plans = self.change_dir / "plans"
         plans.mkdir(parents=True, exist_ok=True)

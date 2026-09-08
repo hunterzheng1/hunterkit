@@ -1,6 +1,6 @@
 ---
 name: harness-task
-description: "轻任务闭环：一条命令完成任务记录→验证→归档（begin/finish/status），适用于文档/配置改动与普通功能/局部缺陷修复。仅当用户显式调用 /harness-task 时使用；需求涉及权限、安全、迁移、并发、契约破坏时不得使用，转 /harness-plan 完整流程。"
+description: "轻任务闭环：一条命令完成任务记录→验证→归档（begin/finish/status），适用于文档/配置改动与普通功能/局部缺陷修复。仅当用户显式调用 /harness-task 时使用；需求涉及权限、安全、迁移、并发、契约破坏或契约/Schema 邻接文件（harness_change/fixback/efficiency/events/ledger/state/archive/gate 等被跨模块消费 schema 的脚本）时不得使用，转 /harness-plan 完整流程。"
 ---
 
 # harness-task — 轻任务闭环
@@ -22,6 +22,11 @@ plan-evidence-input.json——`harness_task.py` 一条命令完成任务记录 �
 - 安全（secret、crypto）、数据迁移（migration、SQL）
 - 并发（lock、lease、transaction）、破坏制品协议（artifact、manifest、baseline）
 - 共享状态（shared、state/、workflow-policy）、删除类改动（delete、purge）
+- 契约/Schema 邻接文件变更：`harness/scripts/` 下的 harness_change/
+  harness_fixback/harness_efficiency/harness_events/harness_ledger/
+  harness_state/harness_archive/harness_gate .py——它们的输出 schema 被
+  跨语言/跨模块消费（TS CLI、其他 harness 脚本），变更即 contract-schema
+  信号 → full（权威清单：harness_gate.py `CONTRACT_SCHEMA_PATHS`）
 - 需要多阶段设计审批、worktree 隔离、或 API 契约重设
 
 适用：文档/配置改动（fast 档）+ 普通功能开发 + 局部缺陷修复（standard 档）。
@@ -31,7 +36,7 @@ plan-evidence-input.json——`harness_task.py` 一条命令完成任务记录 �
 | 步骤 | 动作 |
 |------|------|
 | ① 理解目标 | 从需求提炼一句话目标（成为 businessGoal）与至少一条可验证验收条件。缺陷任务先写失败测试作为回归证据 |
-| ② begin | `python <skills-root>/scripts/harness_task.py begin --project . --change <kebab-case-id> --executor <tool> --goal "<目标一句话>" --acceptance "<可验证条件>" --json`（`--acceptance` 可重复）。重跑幂等：复用同一 runId，不重复 phase.start |
+| ② begin | `python <skills-root>/scripts/harness_task.py begin --project . --change <kebab-case-id> --executor <tool> --goal "<目标一句话>" --acceptance "<可验证条件>" [--tier fast\|standard] --json`（`--acceptance` 可重复）。`--tier` 声明档位下限：声明比裁决高时抬升裁决，反之不压低（classify 信号升级仍生效）；`--tier full` 直接拒绝（rc 3，不建 change 目录），转 `/harness-plan`。重跑幂等：复用同一 runId，不重复 phase.start；改口声明档位 → 拒绝 |
 | ③ 自由探索/编辑/测试 | 正常编码。不写 plan-evidence-input.json、不调阶段 Skill、不手写 ledger/events JSON——全部由 finish 生成 |
 | ④ finish | `python <skills-root>/scripts/harness_task.py finish --project . --change <cn> --json`。一条命令完成：classify → 档位裁决 → 跑档位验证 → 写 ledger → 生成 plan.md → commit（不 push）→ 归档（record-only）。放弃任务用 `--closure abandoned --closure-reason "<中文原因>"`；不想自动提交用 `--no-commit` |
 | ⑤ 报告 | 把 finish 返回的 summary（完成内容/验证结果/残余风险/代码位置）原样报告给用户，附 archiveDir |
@@ -41,7 +46,7 @@ plan-evidence-input.json——`harness_task.py` 一条命令完成任务记录 �
 | 规则 | 要点 |
 |------|------|
 | begin 前工作区 | begin 会记录脏树基线；begin 之前就存在且任务未触碰的脏文件会被 finish 拒绝（FOREIGN_PATHS_PRESENT）——先提交或 stash 无关改动 |
-| 档位 | fast（docs/config）→ unitTest；standard（代码）→ compile+unitTest+unitTestFull。full 信号 → finish 拒绝（TASK_TIER_UPGRADE_REQUIRED），change 目录保留，转 `/harness-plan` 续用 |
+| 档位 | fast（docs/config）→ unitTest；standard（代码）→ compile+unitTest+unitTestFull。full 信号（含 contract-schema）→ finish 拒绝（TASK_TIER_UPGRADE_REQUIRED），change 目录保留，转 `/harness-plan` 续用。begin `--tier` 声明是下限（floor）：声明 standard + docs-only diff → 仍按 standard 记账，不降级 |
 | 验证 | 命令从 build-profile `verificationGraph.targets` 解析；缺 target 按回退链（unitTest→unitTestFull；compile→unitTest→unitTestFull）落到真实存在的目标，ledger 记录真实执行名。缺 build-profile → `harness_preflight.py detect` 重新探测 |
 | 失败重跑 | 验证失败修复后直接重跑 finish（幂等：phase.end 不重复、ledger 覆盖）。归档失败同样重跑 finish 补归档 |
 | 状态恢复 | 任何时刻 `harness_task.py status --project . --change <cn> --json` 查看档位/已记验证/未提交 diff/下一步 |

@@ -84,6 +84,7 @@
         "concurrency",
         "artifact-protocol",
         "shared-state",
+        "contract-schema",
         "breaking-api"
       ]
     },

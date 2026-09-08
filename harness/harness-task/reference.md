@@ -7,7 +7,8 @@
 
 ```
 harness_task.py begin  --project . --change <cn> --executor <tool> \
-                      --goal "<目标一句话>" --acceptance "<条件>" (可重复) --json
+                      --goal "<目标一句话>" --acceptance "<条件>" (可重复) \
+                      [--tier fast|standard] --json
 harness_task.py finish --project . --change <cn> [--commit-message <msg>] \
                        [--closure abandoned|superseded --closure-reason <r>] \
                        [--no-commit] --json
@@ -16,9 +17,12 @@ harness_task.py status --project . --change <cn> --json
 
 - `begin`：建 `.harness/changes/<cn>/`（change-context + state-snapshot +
   task.json + phase.start + decision）。重跑幂等——复用同一 runId。
+  `--tier` 声明档位下限（floor）：声明比 finish 裁决高时抬升裁决，
+  反之不压低（classify 信号升级仍生效）；`--tier full` 直接拒绝
+  （rc=3，不建 change 目录）；改口声明不同档位 → TASK_INPUT_INVALID。
 - `finish`：classify → 档位裁决 → 验证 → ledger → plan.md → commit →
   归档（record-only）。幂等——验证失败修复后、归档失败处理后都直接重跑。
-- `status`：只读恢复视图（档位/已记验证/未提交 diff/下一步）。
+- `status`：只读恢复视图（档位/声明档位/已记验证/未提交 diff/下一步）。
 
 ## 档位映射
 
@@ -26,10 +30,20 @@ harness_task.py status --project . --change <cn> --json
 |------|------|----------|--------|
 | fast | docs-only / no-code-diff（.md/.txt/.rst、docs/） | unitTest | unitTest → unitTestFull |
 | standard | 其余全部代码 diff | compile + unitTest + unitTestFull | compile → unitTest → unitTestFull；unitTest → unitTestFull |
-| full | auth/security/migration/concurrency/artifact-protocol/shared-state/delete 信号 | **拒绝**（TASK_TIER_UPGRADE_REQUIRED） | — |
+| full | auth/security/migration/concurrency/artifact-protocol/shared-state/delete/contract-schema 信号 | **拒绝**（TASK_TIER_UPGRADE_REQUIRED） | — |
 
 - 档位由 finish 从 classify signals 自行裁决（classify 的单调升级只升
   不降，docs-only 不会把默认 standard 降为 fast）。
+- **声明档位下限（floor）**：begin `--tier` 写入 task.json
+  `declaredTier`（与 finish 裁决的 `tier` 分离）；声明比裁决高时抬升
+  裁决（声明 standard + docs-only → 按 standard 记账），反之不压低
+  （声明 fast + auth 信号 → 仍拒）。与归档重跑的 recorded_tier 保留
+  机制并行，任意顺序组合无冲突。
+- **契约文件清单（contract-schema 信号）**：`harness/scripts/` 下
+  harness_change/fixback/efficiency/events/ledger/state/archive/gate
+  .py 的输出 schema 被跨语言/跨模块消费，变更即升 full。精确路径匹配
+  （非子串——纯测试文件如 test_harness_change.py 不触发）。权威来源：
+  harness_gate.py `CONTRACT_SCHEMA_PATHS`；文件改名需同步维护。
 - 回退后 ledger 记录**真实执行**的验证名（如 unitTestFull），不伪造
   缺失项；build-profile 缺 target 时按回退链找更广覆盖的目标。
 - 归档失败重跑时产品树已提交（classify 只见 no-code-diff），档位沿用
@@ -65,7 +79,7 @@ finish 在执行前先生成验证计划（`_plan_verifications`），摘要项�
 | TASK_INPUT_INVALID | begin 输入缺失/非法（change 名、goal、acceptance） | 按 problems[] 补参重跑 begin |
 | TASK_NOT_BEGUN | change 缺 meta/task.json | 先运行 begin |
 | TASK_ALREADY_FINISHED | 任务已终态（completed/abandoned/superseded） | `status` 查看结果；新任务换 change 名 |
-| TASK_TIER_UPGRADE_REQUIRED | diff 触发 full 档信号（rc=3） | 改用 `/harness-plan` 完整流程；change 目录保留可续用 |
+| TASK_TIER_UPGRADE_REQUIRED | diff 触发 full 档信号（rc=3）；begin `--tier full` 也返回（rc=3，field_path=args.tier，不建 change 目录）；手改 task.json declaredTier=full 同样拒绝（field_path=meta/task.json.declaredTier） | 改用 `/harness-plan` 完整流程；change 目录保留可续用 |
 | FOREIGN_PATHS_PRESENT | begin 前预存且任务未触碰的脏路径（或 .harness 结构越界） | 移出工作区/提交/stash 后重跑 finish |
 | VERIFICATION_TARGET_MISSING | build-profile 未声明验证目标（含回退链） | `harness_preflight.py detect --project . --json` 重新探测 |
 | VERIFICATION_FAILED | 验证命令 exit≠0（ledger 已记失败） | 修复后重跑 finish（ledger 覆盖） |
@@ -83,7 +97,8 @@ finish 在执行前先生成验证计划（`_plan_verifications`），摘要项�
 1. classify（post-run，读脏树 git status）
 2. 档位裁决 + 外来脏路径检测（begin 脏树基线 + classify foreignPaths
    双通道；重试时上次验证副作用弄脏的产品树文件按任务工作并入
-   ownership，不拒绝——P9）
+   ownership，不拒绝——P9）；declaredTier 纵深防御（非法值拒绝）+
+   floor 抬升（声明比裁决高时）
 3. 声明 ownership.productPaths（classify 的 productPaths + 契约外
    产品树脏路径）
 4. 写 gate-policy（plannedPhases=["task","archive"]）

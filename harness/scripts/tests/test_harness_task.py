@@ -230,6 +230,154 @@ class FinishTierTests(HarnessTaskFixture):
         self.assertFalse((change_dir / "evidence").is_dir())
         self.assertFalse((self.project / ".harness" / "archive").exists())
 
+    def test_finish_contract_file_change_is_rejected(self) -> None:
+        """P12 验收（T4 复现）：契约文件变更 → full 拒绝。
+
+        修复前：harness_change.py 不命中任何 full marker → 误判 standard，
+        轻任务入口放行（批次 1 试点 T4 实录）。修复后：精确清单命中 →
+        contract-schema 信号 → rc 3 转完整流程。
+        """
+        scripts_dir = self.project / "harness" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "harness_change.py").write_text(
+            "print('change v1')\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git("commit", "-m", "add contract file")
+        self._begin("contract-touch")
+        (scripts_dir / "harness_change.py").write_text(
+            "print('change v2')\n", encoding="utf-8"
+        )
+        rc, out = self._finish("contract-touch")
+        self.assertEqual(rc, 3)
+        self.assertEqual(out["code"], "TASK_TIER_UPGRADE_REQUIRED")
+        self.assertEqual(out["signals"], ["contract-schema"])
+        self.assertTrue(out["changePreserved"])
+        change_dir = self._change_dir("contract-touch")
+        self.assertTrue(change_dir.is_dir())
+        self.assertFalse((change_dir / "evidence").is_dir())
+        self.assertFalse((self.project / ".harness" / "archive").exists())
+
+
+class DeclaredTierTests(HarnessTaskFixture):
+    """P12 修复：begin --tier 声明档位（下限语义）+ 冲突守卫。"""
+
+    def test_begin_declared_full_is_rejected_before_dir_creation(self) -> None:
+        """--tier full：立即拒绝 rc 3，不建 change 目录（无孤儿目录）。"""
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "full-decl",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "full", "--json",
+        )
+        self.assertEqual(rc, 3)
+        self.assertEqual(out["code"], "TASK_TIER_UPGRADE_REQUIRED")
+        self.assertEqual(out["field_path"], "args.tier")
+        self.assertFalse(self._change_dir("full-decl").exists())
+
+    def test_begin_declared_tier_recorded_and_status_exposes_it(self) -> None:
+        """--tier standard：task.json 记 declaredTier；status 输出含之；
+        无 flag begin → declaredTier None。"""
+        self._begin("declared-standard")
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change",
+            "declared-standard", "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "standard", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+        task = json.loads(
+            (self._change_dir("declared-standard") / "meta" / "task.json")
+            .read_text(encoding="utf-8-sig")
+        )
+        self.assertEqual(task["declaredTier"], "standard")
+        self.assertEqual(out["declaredTier"], "standard")
+
+        rc, status = self._run(
+            "status", "--project", str(self.project), "--change",
+            "declared-standard", "--json",
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(status["declaredTier"], "standard")
+
+        # 对照：无 flag begin → declaredTier None。
+        self._begin("undeclared")
+        task = json.loads(
+            (self._change_dir("undeclared") / "meta" / "task.json")
+            .read_text(encoding="utf-8-sig")
+        )
+        self.assertIsNone(task["declaredTier"])
+
+    def test_begin_conflicting_tier_redeclaration_rejected(self) -> None:
+        """改口声明（fast → standard）→ rc 2；同值重声明幂等 rc 0。"""
+        self._begin("tier-conflict")
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "tier-conflict",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "fast", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "tier-conflict",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "standard", "--json",
+        )
+        self.assertEqual(rc, 2)
+        self.assertEqual(out["code"], "TASK_INPUT_INVALID")
+        self.assertEqual(out["field_path"], "args.tier")
+        # 同值重声明幂等。
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "tier-conflict",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "fast", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+
+    def test_finish_declared_standard_floor_blocks_docs_only_downgrade(self) -> None:
+        """声明 standard + docs-only diff → standard 胜（floor 挡降级）。"""
+        self._begin("floor-standard")
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "floor-standard",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "standard", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+        (self.project / "README.md").write_text("v2\n", encoding="utf-8")
+        rc, out = self._finish("floor-standard")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "standard")
+        ledger = self._ledger(Path(out["archiveDir"]))
+        self.assertIn("unitTestFull", ledger["validations"])
+
+    def test_finish_declared_fast_still_rejects_on_signals(self) -> None:
+        """声明 fast + auth 信号 → 仍拒（floor 是下限非上限）。"""
+        (self.project / "auth.py").write_text("TOKEN='x'\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-m", "add auth")
+        self._begin("fast-declared")
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "fast-declared",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "fast", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+        (self.project / "auth.py").write_text("TOKEN='y'\n", encoding="utf-8")
+        rc, out = self._finish("fast-declared")
+        self.assertEqual(rc, 3)
+        self.assertEqual(out["code"], "TASK_TIER_UPGRADE_REQUIRED")
+        self.assertEqual(out["signals"], ["auth"])
+
+    def test_finish_hand_edited_declared_full_is_rejected(self) -> None:
+        """纵深防御：手改 task.json declaredTier=full → finish 拒绝 rc 3。"""
+        self._begin("hand-edited")
+        task_path = self._change_dir("hand-edited") / "meta" / "task.json"
+        task = json.loads(task_path.read_text(encoding="utf-8-sig"))
+        task["declaredTier"] = "full"
+        task_path.write_text(json.dumps(task), encoding="utf-8")
+        (self.project / "README.md").write_text("v2\n", encoding="utf-8")
+        rc, out = self._finish("hand-edited")
+        self.assertEqual(rc, 3)
+        self.assertEqual(out["code"], "TASK_TIER_UPGRADE_REQUIRED")
+        self.assertEqual(out["field_path"], "meta/task.json.declaredTier")
+
 
 class FinishBoundaryTests(HarnessTaskFixture):
     def test_finish_rejects_preexisting_foreign_dirt(self) -> None:
@@ -508,18 +656,21 @@ class VerificationPlanTests(HarnessTaskFixture):
         self.assertEqual(sorted(ledger["validations"]), ["unitTestFull"])
 
     def test_p6_python_source_change_uses_targeted_unittest(self) -> None:
-        """P6：harness_change.py 变更 → unitTest 项是定向 unittest。
+        """P6：harness_preflight.py 变更 → unitTest 项是定向 unittest。
 
         compile/unitTestFull 仍走 npm 链（回退到唯一 target）且互相去重
         ——共 2 次执行（1× check.py + 1× 定向 python）。
+        fixture 用 harness_preflight.py（约定派生、不在契约清单）；原
+        harness_change.py fixture 自 P12 修复起命中 contract-schema →
+        full 拒绝，语义等价迁移到本文件。
         """
         scripts_dir = self.project / "harness" / "scripts"
         tests_dir = scripts_dir / "tests"
         tests_dir.mkdir(parents=True, exist_ok=True)
-        (scripts_dir / "harness_change.py").write_text(
-            "print('change v1')\n", encoding="utf-8"
+        (scripts_dir / "harness_preflight.py").write_text(
+            "print('preflight v1')\n", encoding="utf-8"
         )
-        (tests_dir / "test_harness_change.py").write_text(
+        (tests_dir / "test_harness_preflight.py").write_text(
             "import unittest\n"
             "class T(unittest.TestCase):\n"
             "    def test_ok(self):\n"
@@ -529,8 +680,8 @@ class VerificationPlanTests(HarnessTaskFixture):
         self._git("add", "-A")
         self._git("commit", "-m", "add harness python")
         self._begin("python-targeted")
-        (scripts_dir / "harness_change.py").write_text(
-            "print('change v2')\n", encoding="utf-8"
+        (scripts_dir / "harness_preflight.py").write_text(
+            "print('preflight v2')\n", encoding="utf-8"
         )
         executed: list[list[str]] = []
         original = ht.htr.run_managed_command
@@ -550,7 +701,7 @@ class VerificationPlanTests(HarnessTaskFixture):
         self.assertEqual(len(executed), 2, executed)
         targeted = [a for a in executed if "-m" in a and "unittest" in a]
         self.assertEqual(len(targeted), 1)
-        self.assertIn("test_harness_change", targeted[0])
+        self.assertIn("test_harness_preflight", targeted[0])
         by_name = {v["verification"]: v for v in out["verifications"]}
         self.assertEqual(by_name["unitTest"]["reason"], "python-targeted")
         # ledger：unitTest（定向，显式 files）+ unitTestFull（回退链）。
@@ -561,10 +712,10 @@ class VerificationPlanTests(HarnessTaskFixture):
         entry = ledger["validations"]["unitTest"]
         self.assertEqual(entry["status"], "OK")
         self.assertIn(
-            "harness/scripts/harness_change.py", entry.get("inputsFiles") or []
+            "harness/scripts/harness_preflight.py", entry.get("inputsFiles") or []
         )
         self.assertIn(
-            "harness/scripts/tests/test_harness_change.py",
+            "harness/scripts/tests/test_harness_preflight.py",
             entry.get("inputsFiles") or [],
         )
 

@@ -1402,6 +1402,22 @@ def _apply_required_gate_contract(
     return result
 
 
+# P12 契约文件清单：这些文件的输出 schema 被跨语言/跨模块消费（TS CLI、
+# 其他 harness 脚本），变更它们 = 契约变更，必须升 full 档。精确路径匹配
+# （非子串），文件改名/迁移时需同步维护本清单（同
+# PYTHON_TEST_MODULES_BY_SOURCE 约定）。权威来源是这里，不是 workflow-policy。
+CONTRACT_SCHEMA_PATHS = frozenset({
+    "harness/scripts/harness_archive.py",
+    "harness/scripts/harness_change.py",
+    "harness/scripts/harness_efficiency.py",
+    "harness/scripts/harness_events.py",
+    "harness/scripts/harness_fixback.py",
+    "harness/scripts/harness_gate.py",
+    "harness/scripts/harness_ledger.py",
+    "harness/scripts/harness_state.py",
+})
+
+
 def classify_risk(
     change_dir: Path,
     stage: str,
@@ -1511,6 +1527,11 @@ def classify_risk(
         for signal, markers in full_markers.items():
             if any(marker in lowered for marker in markers):
                 signals.append(signal)
+        if any(
+            path.replace("\\", "/").lower() in CONTRACT_SCHEMA_PATHS
+            for path in product_paths
+        ):
+            signals.append("contract-schema")
         if signals:
             observed = "full"
         elif product_paths and all(
