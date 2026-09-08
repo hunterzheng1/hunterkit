@@ -745,6 +745,12 @@ python <skills-root>/scripts/harness_context.py bootstrap-execute --project . --
 #   返回 EXECUTE_BOOTSTRAPPED 即就绪；BOOTSTRAP_EXECUTE_*_FAILED 时按 recoveryAction 排障，
 #   原三连命令路径保留为出口（各步幂等，从失败环节起原样重试）。
 
+# 中断恢复（批次 2 WI-3）：一条只读命令看全貌——当前阶段/runId、plannedPhases 进度、
+# ledger 验证状态、租约、脏树、nextAction。不要法证式读 gate-policy/events/ledger 原文。
+python <skills-root>/scripts/harness_change.py status --change <cn> --json
+#   返回 CHANGE_RECOVERY_VIEW；handoffPending=true → phase.end 已写、交接未落盘，
+#   按 nextAction 用原 close 命令补 --to-phase 幂等续跑。
+
 # gate begin/close（phase=test；--task 仅 checkpoint 启用时必需；close 不需要 --skills-root）
 python <skills-root>/scripts/harness_gate.py begin --change <cn> --phase test --skills-root <skills-root> [--task N]
 python <skills-root>/scripts/harness_gate.py close --change <cn> --phase test --status OK --to-phase <plannedPhases 中 test 的后继> --executor <tool> [--task N]

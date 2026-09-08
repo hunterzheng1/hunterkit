@@ -23,6 +23,10 @@ harness_task.py status --project . --change <cn> --json
 - `finish`：classify → 档位裁决 → 验证 → ledger → plan.md → commit →
   归档（record-only）。幂等——验证失败修复后、归档失败处理后都直接重跑。
 - `status`：只读恢复视图（档位/声明档位/已记验证/未提交 diff/下一步）。
+  跨代际统一视图用 `harness_change.py status --project . --change <cn> --json`
+  （批次 2 WI-3，返回 `CHANGE_RECOVERY_VIEW`：轻任务与完整流程同一输出
+  结构，含阶段身份/plannedPhases 进度/租约/外来脏路径/nextAction）；
+  `harness_task.py status` 保持可用，轻任务场景两者信息等价。
 
 ## 档位映射
 

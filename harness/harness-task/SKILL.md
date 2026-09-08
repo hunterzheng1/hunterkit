@@ -49,7 +49,7 @@ plan-evidence-input.json——`harness_task.py` 一条命令完成任务记录 �
 | 档位 | fast（docs/config）→ unitTest；standard（代码）→ compile+unitTest+unitTestFull。full 信号（含 contract-schema）→ finish 拒绝（TASK_TIER_UPGRADE_REQUIRED），change 目录保留，转 `/harness-plan` 续用。begin `--tier` 声明是下限（floor）：声明 standard + docs-only diff → 仍按 standard 记账，不降级 |
 | 验证 | 命令从 build-profile `verificationGraph.targets` 解析；缺 target 按回退链（unitTest→unitTestFull；compile→unitTest→unitTestFull）落到真实存在的目标，ledger 记录真实执行名。缺 build-profile → `harness_preflight.py detect` 重新探测 |
 | 失败重跑 | 验证失败修复后直接重跑 finish（幂等：phase.end 不重复、ledger 覆盖）。归档失败同样重跑 finish 补归档 |
-| 状态恢复 | 任何时刻 `harness_task.py status --project . --change <cn> --json` 查看档位/已记验证/未提交 diff/下一步 |
+| 状态恢复 | 任何时刻 `harness_task.py status --project . --change <cn> --json` 查看档位/已记验证/未提交 diff/下一步；跨代际统一视图 `harness_change.py status --change <cn> --json`（轻任务与完整流程同构，批次 2 WI-3） |
 | 产物 | 只写 `.harness/changes/<cn>/`；plan.md、execution-log、ledger、events 全部由脚本生成，禁止手写 |
 
 错误码表、档位映射、Windows 路径陷阱 → `reference.md`
