@@ -8515,11 +8515,17 @@ def cmd_finalize(
         return 1, payload
 
     # --- 2b. user-flag decision (archive fact, must precede the cutoff) ---
+    # P13：note 带实际 tier——轻任务（standard/fast）固定传
+    # allow_missing_review=True，硬编码 "full tier" 会误导审计读档。
     if allow_missing_review:
         _safe_append(
             phase="archive",
             type_="decision",
-            note="review missing on full tier (allowed by user)",
+            note=(
+                "review missing on "
+                f"{str(((status.get('checks') or {}).get('riskTier')) or 'unknown')} "
+                "tier (allowed by user)"
+            ),
         )
 
     # --- 2c. artifact preflight (retro §5.31) ---
@@ -8678,7 +8684,12 @@ def cmd_finalize(
         write_json(summary_path, summary)
         if allow_missing_review:
             reasons = list(summary.get("finalStatusReasons") or [])
-            reason = "review missing on full tier (allowed by user)"
+            # P13：reason 带实际 tier（与 2b decision 事件同源）。
+            reason = (
+                "review missing on "
+                f"{str(((status.get('checks') or {}).get('riskTier')) or 'unknown')} "
+                "tier (allowed by user)"
+            )
             if reason not in reasons:
                 reasons.append(reason)
             summary["finalStatusReasons"] = reasons

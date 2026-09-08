@@ -347,6 +347,48 @@ class DeclaredTierTests(HarnessTaskFixture):
         ledger = self._ledger(Path(out["archiveDir"]))
         self.assertIn("unitTestFull", ledger["validations"])
 
+    def test_gate_policy_tier_carries_final_adjudicated_tier(self) -> None:
+        """floor 抬升后 gate-policy.json 的 tier 用最终裁决值。
+
+        归档的 P13 文案与 full-tier review 拦截都读 gate-policy.json 的
+        tier——classify 原值（fast）不得泄漏进去。
+        """
+        self._begin("floor-policy")
+        rc, out = self._run(
+            "begin", "--project", str(self.project), "--change", "floor-policy",
+            "--executor", "test", "--goal", "x",
+            "--acceptance", "y", "--tier", "standard", "--json",
+        )
+        self.assertEqual(rc, 0, out)
+        (self.project / "README.md").write_text("v2\n", encoding="utf-8")
+        rc, out = self._finish("floor-policy")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "standard")
+        archive_dir = Path(out["archiveDir"])
+        policy = json.loads(
+            (archive_dir / "meta" / "gate-policy.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
+        self.assertEqual(policy.get("tier"), "standard")
+        # 归档 decision 文案与 gate-policy 同源（P13）。
+        events = [
+            json.loads(line)
+            for line in (archive_dir / "events.ndjson").read_text(
+                encoding="utf-8-sig"
+            ).splitlines()
+            if line.strip()
+        ]
+        review_notes = [
+            str(e.get("note") or "")
+            for e in events
+            if e.get("phase") == "archive"
+            and e.get("type") == "decision"
+            and "review missing" in str(e.get("note") or "")
+        ]
+        self.assertTrue(review_notes)
+        self.assertIn("review missing on standard tier", review_notes[0])
+
     def test_finish_declared_fast_still_rejects_on_signals(self) -> None:
         """声明 fast + auth 信号 → 仍拒（floor 是下限非上限）。"""
         (self.project / "auth.py").write_text("TOKEN='x'\n", encoding="utf-8")
@@ -445,6 +487,49 @@ class FinishRoundTripTests(HarnessTaskFixture):
         # final-hash：execution-log 的 hash 即提交后 HEAD（无上游不 push）。
         head = self._git("rev-parse", "HEAD")
         self.assertEqual(out["commit"], head)
+
+    def test_archive_review_missing_note_carries_actual_tier(self) -> None:
+        """P13：归档 review-missing 文案带实际 tier，不再硬编码 full。
+
+        轻任务固定传 allow_missing_review=True（流程无 review 阶段），
+        standard 档归档的 decision 事件与 finalStatusReasons 必须写
+        standard——修复前硬编码 "full tier" 误导审计。
+        """
+        self._begin("p13-standard")
+        (self.project / "check.py").write_text("print('v2')\n", encoding="utf-8")
+        rc, out = self._finish("p13-standard")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out["tier"], "standard")
+        archive_dir = Path(out["archiveDir"])
+
+        events = [
+            json.loads(line)
+            for line in (archive_dir / "events.ndjson").read_text(
+                encoding="utf-8-sig"
+            ).splitlines()
+            if line.strip()
+        ]
+        notes = [
+            str(e.get("note") or "")
+            for e in events
+            if e.get("phase") == "archive" and e.get("type") == "decision"
+        ]
+        review_notes = [n for n in notes if "review missing" in n]
+        self.assertTrue(review_notes, notes)
+        self.assertIn("review missing on standard tier", review_notes[0])
+        self.assertNotIn("full tier", review_notes[0])
+
+        summary = json.loads(
+            (archive_dir / "reports" / "final" / "summary-data.json").read_text(
+                encoding="utf-8-sig"
+            )
+        )
+        reasons = [str(r) for r in (summary.get("finalStatusReasons") or [])]
+        self.assertTrue(
+            any("review missing on standard tier" in r for r in reasons),
+            reasons,
+        )
+        self.assertFalse(any("full tier" in r for r in reasons), reasons)
 
     def test_archive_failure_reverts_task_and_rerun_succeeds(self) -> None:
         """归档失败 → task.json 回滚 open、phase.end 不重复 → 重跑成功。

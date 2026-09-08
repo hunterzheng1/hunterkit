@@ -1278,8 +1278,11 @@ def cmd_finish(args: argparse.Namespace) -> int:
 
     # ③ 写 gate-policy（plannedPhases=["task","archive"] 使 archive_auto_gate
     #    认得 phase.end(task)——harness_archive.py:3480-3485 的 completed_phase
-    #    取 plannedPhases 中 archive 的前一个）
+    #    取 plannedPhases 中 archive 的前一个）。tier 用最终裁决值（含
+    #    declared floor / recorded_tier 保留）——归档的 P13 文案与
+    #    full-tier review 拦截都读这份文件的 tier。
     classification.setdefault("tierOverride", None)
+    classification["tier"] = tier
     classification["classifiedAt"] = now_iso()
     policy_doc = hg.gate_policy_document(classification)
     policy_doc["plannedPhases"] = [TASK_PHASE, "archive"]
