@@ -1170,6 +1170,249 @@ def bootstrap_plan(
     }
 
 
+def _execute_run_identity(change_dir: Path) -> tuple[str, int] | None:
+    """已存在且未关门的 execute `phase.start` 身份（run-id, attempt）。
+
+    与 _plan_run_identity 同语义，但 execute 的 phase.start 由 gate begin 写入
+    （含 auto-seal 重试），因此：
+    - 只认还没有 phase.end / phase.auto_sealed 收口的 run（已关门的引导
+      重跑必须开新 run，不能复活旧身份）；
+    - 事件文件经 harness_events.events_path 解析（state 目录权威位置）。
+    """
+    import harness_events as he
+
+    events_file = he.events_path(change_dir)
+    started: list[dict[str, Any]] = []
+    closed: set[str] = set()
+    for event in he.load_events(events_file):
+        if hpaths.resolve_phase_name(event.get("phase")) != "execute":
+            continue
+        run_id = str(event.get("run_id") or "")
+        if not run_id:
+            continue
+        if event.get("type") == "phase.start":
+            started.append(event)
+        elif event.get("type") in {"phase.end", "phase.auto_sealed"}:
+            closed.add(run_id)
+    for event in reversed(started):
+        run_id = str(event.get("run_id") or "")
+        if run_id in closed:
+            continue
+        attempt = event.get("attempt")
+        return run_id, attempt if isinstance(attempt, int) and attempt > 0 else 1
+    return None
+
+
+def bootstrap_execute(
+    project: Path,
+    *,
+    change: str,
+    executor: str,
+    ttl_seconds: int = 3600,
+    note: str = "",
+    task: int | None = None,
+    skills_root: str | None = None,
+    executor_tool: str | None = None,
+    executor_agent: str | None = None,
+    executor_model: str | None = None,
+) -> dict[str, Any]:
+    """execute 阶段一次性引导：prepare → context begin → gate begin。
+
+    三条子进程调用（context prepare → context begin → gate begin）的参数
+    各自必填，漏 `--project` 或 `--change` 就白跑一轮（F 系列教训）；run-id
+    还要调用方自己保证小写字母开头。这些都是确定性工作，交给脚本做。
+
+    幂等：已有未关门的 execute `phase.start` 时复用同一 run-id，不追加
+    第二条（与 bootstrap-plan 同语义）。gate begin 的租约领取对同 run-id
+    是刷新而非冲突（harness_change._claim_lease_locked 的 same_owner 分支）。
+
+    失败信封带 recoveryAction 指回原三连命令路径——排障出口保留（§10.1：
+    旧 change 沿用原序列，不在执行中途静默切换语义）。
+    """
+    import harness_change as hchg
+    import harness_events as he
+    import harness_gate as hg
+
+    project = Path(project).resolve()
+    changes_root = project / ".harness" / "changes"
+    if not changes_root.is_dir():
+        return {
+            "ok": False,
+            "code": "PROJECT_ROOT_INVALID",
+            "error": f"{project / '.harness'} 不存在——该项目尚未初始化，先运行 hunter-harness init",
+        }
+    change_dir = (changes_root / change).resolve()
+    if not change_dir.is_dir():
+        return {
+            "ok": False,
+            "code": "CHANGE_NOT_FOUND",
+            "error": f"change 目录不存在：{change_dir}",
+            "recoveryAction": (
+                "确认 --change 与 .harness/changes/ 下的目录名一致；"
+                "execute 引导不创建 change（那是 bootstrap-plan 的职责）"
+            ),
+        }
+
+    # 1. prepare：领取 context 租约；v2 计划的 plan→execute 凭证在此自动补录
+    prepared = prepare_context(
+        project,
+        phase="execute",
+        executor=executor,
+        change=change,
+        ttl_seconds=ttl_seconds,
+    )
+    if not prepared.get("ok"):
+        return _bootstrap_execute_failed(
+            "prepare", prepared, project=project, change=change
+        )
+
+    # 2. context begin：交接校验（HANDOFF_REQUIRED 在此暴露，不绕过）
+    begun = begin_transition(project, change, phase="execute", executor=executor)
+    if not begun.get("ok"):
+        return _bootstrap_execute_failed(
+            "begin", begun, project=project, change=change
+        )
+
+    # 3. gate begin：领取阶段租约 + 测试基线 guard + phase.start。
+    #    幂等身份先查事件——复用未关门 run-id，避免重复 phase.start。
+    identity = _execute_run_identity(change_dir)
+    reused = identity is not None
+    if identity is None:
+        # v2 identity：必须小写字母开头，裸 UUID 有 10/16 概率数字开头被拒
+        import uuid
+
+        run_id = f"execute_{uuid.uuid4()}"
+    else:
+        run_id = identity[0]
+
+    gate_args = argparse.Namespace(
+        json=True,
+        phase="execute",
+        change=change,
+        project=None,
+        skills_root=skills_root,
+        run_id=run_id,
+        ttl_seconds=ttl_seconds,
+        task=task,
+        note=note or f"/harness-execute 引导：{change}",
+        fixback=False,
+        executor_tool=executor_tool,
+        executor_agent=executor_agent,
+        executor_model=executor_model,
+    )
+
+    class _Capture:
+        def __init__(self) -> None:
+            self.chunks: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.chunks.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            pass
+
+        def getvalue(self) -> str:
+            return "".join(self.chunks)
+
+    captured_out = _Capture()
+    captured_err = _Capture()
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    original_cwd = os.getcwd()
+    # cmd_begin 经 resolve_main_project_root() 从 cwd 定位主项目根；进程内
+    # 复用时临时切到 project（os.chdir + try/finally 是本仓既有模式，
+    # 见 test_harness_fixback.py:559）。emit_error 的 JSON 走 stderr
+    # （harness_gate.py:120），两边都捕获才能还原错误信封。
+    os.chdir(project)
+    sys.stdout = captured_out  # type: ignore[assignment]
+    sys.stderr = captured_err  # type: ignore[assignment]
+    try:
+        rc = hg.cmd_begin(gate_args)
+    finally:
+        sys.stdout = original_stdout  # type: ignore[assignment]
+        sys.stderr = original_stderr  # type: ignore[assignment]
+        os.chdir(original_cwd)
+
+    gate_payload: dict[str, Any] | None = None
+    for raw in (captured_out.getvalue().strip(), captured_err.getvalue().strip()):
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            gate_payload = parsed
+            break
+    if rc != 0 or gate_payload is None or not gate_payload.get("ok"):
+        failure = gate_payload or {
+            "ok": False,
+            "code": "BOOTSTRAP_GATE_BEGIN_FAILED",
+            "message": f"gate begin 退出码 {rc}，未返回有效 JSON",
+        }
+        return _bootstrap_execute_failed(
+            "gate-begin", failure, project=project, change=change
+        )
+
+    # 4. 紧凑摘要：runId/attempt/tier/租约 TTL/测试基线状态
+    identity = _execute_run_identity(change_dir) or (run_id, 1)
+    effective_run_id, attempt = identity
+    policy = hpaths.load_change_gate_policy(change_dir)
+    policy_doc = policy.get("policy") if isinstance(policy, dict) else None
+    tier = policy_doc.get("tier") if isinstance(policy_doc, dict) else None
+    lease = gate_payload.get("lease")
+    test_guard = gate_payload.get("testGuard")
+    return {
+        "ok": True,
+        "code": "EXECUTE_BOOTSTRAPPED",
+        "changeName": change,
+        "changeDir": str(change_dir),
+        "executionRoot": gate_payload.get("executionRoot"),
+        "runId": effective_run_id,
+        "attempt": attempt,
+        "reused": reused,
+        "tier": tier,
+        "lease": lease,
+        "leaseTtlSeconds": (
+            lease.get("ttlSeconds") if isinstance(lease, dict) else None
+        ),
+        "testBaseline": test_guard,
+        "plannedPhases": prepared.get("plannedPhases"),
+        "gateWarnings": gate_payload.get("gateWarnings"),
+        "nextAction": (
+            "TDD 编码与验证；完成后运行 "
+            f"harness_gate.py close --phase execute --change {change} --status <OK|WARN> --json"
+        ),
+    }
+
+
+def _bootstrap_execute_failed(
+    stage: str,
+    failure: dict[str, Any],
+    *,
+    project: Path,
+    change: str,
+) -> dict[str, Any]:
+    """统一失败信封：保留原错误 + recoveryAction 指回原三连命令路径。"""
+    return {
+        "ok": False,
+        "code": f"BOOTSTRAP_EXECUTE_{stage.upper().replace('-', '_')}_FAILED",
+        "stage": stage,
+        "error": failure,
+        "recoveryAction": (
+            "bootstrap-execute 失败时按原三连命令路径排障（旧路径保留为出口）：\n"
+            f"1) python <skills-root>/scripts/harness_context.py prepare --project . "
+            f"--change {change} --phase execute --executor <tool> --json\n"
+            f"2) python <skills-root>/scripts/harness_context.py begin --project . "
+            f"--change {change} --phase execute --executor <tool> --json\n"
+            f"3) python <skills-root>/scripts/harness_gate.py begin --phase execute "
+            f"--change {change} --json\n"
+            "按上述错误信封定位失败环节后，从该环节起原样重试（各步幂等）。"
+        ),
+    }
+
+
 def _invalidate_for_fixback(
     state_root: Path,
     *,
@@ -1975,6 +2218,21 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--title")
     bootstrap.add_argument("--stage", default="plan", choices=["plan", "post-run"])
     bootstrap.add_argument("--ttl-seconds", type=int, default=3600)
+    bootstrap_execute_parser = sub.add_parser(
+        "bootstrap-execute",
+        help="execute 阶段一次性引导：prepare → context begin → gate begin（幂等）",
+    )
+    bootstrap_execute_parser.add_argument("--json", action="store_true")
+    bootstrap_execute_parser.add_argument("--project", required=True, type=Path)
+    bootstrap_execute_parser.add_argument("--change", "--change-dir", dest="change", required=True)
+    bootstrap_execute_parser.add_argument("--executor", required=True)
+    bootstrap_execute_parser.add_argument("--ttl-seconds", type=int, default=3600)
+    bootstrap_execute_parser.add_argument("--note", default="")
+    bootstrap_execute_parser.add_argument("--task", type=int, default=None)
+    bootstrap_execute_parser.add_argument("--skills-root", default=None)
+    bootstrap_execute_parser.add_argument("--executor-tool", default=None)
+    bootstrap_execute_parser.add_argument("--executor-agent", default=None)
+    bootstrap_execute_parser.add_argument("--executor-model", default=None)
     close = sub.add_parser("close")
     close.add_argument("--json", action="store_true")
     close.add_argument("--project", required=True, type=Path)
@@ -2046,6 +2304,19 @@ def main(argv: list[str] | None = None) -> int:
             display_title=args.title,
             stage=args.stage,
             ttl_seconds=args.ttl_seconds,
+        )
+    elif args.command == "bootstrap-execute":
+        result = bootstrap_execute(
+            args.project,
+            change=args.change,
+            executor=args.executor,
+            ttl_seconds=args.ttl_seconds,
+            note=args.note,
+            task=args.task,
+            skills_root=args.skills_root,
+            executor_tool=args.executor_tool,
+            executor_agent=args.executor_agent,
+            executor_model=args.executor_model,
         )
     elif args.command == "close":
         result = close_transition(
