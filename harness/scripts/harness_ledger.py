@@ -3151,6 +3151,172 @@ def cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- 批次 2 WI-1b：record-from-receipt（证据直接采集） ---
+
+RECEIPT_REQUIRED_FIELDS = (
+    "argv",
+    "exitCode",
+    "timedOut",
+    "durationMs",
+    "outputTail",
+)
+
+
+def _load_exec_result_receipt(
+    receipt_path: Path,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    """读取并校验 exec 结果收据。
+
+    返回 (receipt, field_path, problem)；receipt 为 None 时 field_path
+    指向第一个问题字段。错误信封带 field_path 是 F3 的教训（无
+    field_path 时排障靠读源码）。
+    """
+
+    try:
+        raw = receipt_path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        return None, "receipt", f"unreadable: {exc}"
+    try:
+        receipt = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return None, "receipt", f"invalid JSON: {exc}"
+    if not isinstance(receipt, dict):
+        return None, "receipt", "top level must be an object"
+    if receipt.get("schemaVersion") != 1:
+        return (
+            None,
+            "schemaVersion",
+            f"expected 1, got {receipt.get('schemaVersion')!r}",
+        )
+    if receipt.get("action") != "exec-result":
+        return (
+            None,
+            "action",
+            f"expected 'exec-result', got {receipt.get('action')!r}",
+        )
+    for field in RECEIPT_REQUIRED_FIELDS:
+        if field not in receipt:
+            return None, field, "missing required field"
+    if not isinstance(receipt["argv"], list) or not receipt["argv"]:
+        return None, "argv", "must be a non-empty list"
+    if any(not isinstance(item, str) for item in receipt["argv"]):
+        return None, "argv", "all items must be strings"
+    if not isinstance(receipt["exitCode"], int) or isinstance(
+        receipt["exitCode"], bool
+    ):
+        return None, "exitCode", "must be an integer"
+    if not isinstance(receipt["timedOut"], bool):
+        return None, "timedOut", "must be a boolean"
+    if not isinstance(receipt["durationMs"], int) or isinstance(
+        receipt["durationMs"], bool
+    ):
+        return None, "durationMs", "must be an integer"
+    if not isinstance(receipt["outputTail"], str):
+        return None, "outputTail", "must be a string"
+    return receipt, None, None
+
+
+def _receipt_evidence(output_tail: str) -> str:
+    """从 outputTail 提取 ledger evidence 文本。
+
+    优先保留含测试计数的尾部行（如 "Tests run: N, Failures: M"），
+    最多 4 行；无匹配行时回退到尾部非空行。空输出返回占位说明
+    （evidence 是 record 必填字段，不能为空串）。
+    """
+
+    lines = [line.strip() for line in output_tail.splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        return "(no captured output; see runner logs)"
+    count_lines = [
+        line
+        for line in lines
+        if re.search(r"tests? run|passed|failed|failures?|error", line, re.IGNORECASE)
+    ]
+    selected = count_lines[-4:] if count_lines else lines[-4:]
+    return "\n".join(selected)
+
+
+def cmd_record_from_receipt(args: argparse.Namespace) -> int:
+    as_json = bool(args.json)
+    receipt_path = resolve_path(args.receipt)
+    receipt, field_path, problem = _load_exec_result_receipt(receipt_path)
+    if receipt is None:
+        return emit_error(
+            f"invalid exec result receipt at {receipt_path}: {problem}",
+            as_json=as_json,
+            error_code="RECEIPT_INVALID",
+            extra={
+                "fieldPath": field_path,
+                "recoveryAction": (
+                    "rerun the verification with harness_test_runner.py exec "
+                    "--result-receipt to produce a fresh receipt, or fall back "
+                    "to the manual record subcommand"
+                ),
+            },
+        )
+    verification = args.verification
+    status = "OK" if (receipt["exitCode"] == 0 and not receipt["timedOut"]) else "FAIL"
+    command = " ".join(receipt["argv"])
+    evidence = _receipt_evidence(receipt["outputTail"])
+    # 沿 harness_task.py _record_ledger_entry 的 Namespace 构造模式：
+    # 复用 cmd_record 全部语义（ownership 检查、profile 展开、ledger v3
+    # 迁移、场景绑定），不复制其逻辑。
+    record_args = argparse.Namespace(
+        change_dir=args.change_dir,
+        verification=verification,
+        status=status,
+        command=command,
+        runner_command=None,
+        exit_code=receipt["exitCode"],
+        duration_ms=receipt["durationMs"],
+        files=args.files,
+        files_from=None,
+        evidence=evidence,
+        project=args.project,
+        profile_input=args.profile_input,
+        scope=None,
+        coverage=None,
+        toolchain_hash=None,
+        profile_hash=None,
+        environment_hash=None,
+        db_schema_hash=None,
+        deploy_artifact=None,
+        artifact_hash=None,
+        tests_executed=False,
+        tests_reused_from=None,
+        metrics_json=None,
+        metrics_file=None,
+        base_commit=None,
+        diff_hash=None,
+        applicability=None,
+        applicability_reason=None,
+        scenario_ids=None,
+        scenario_receipt_file=None,
+        verbose=bool(getattr(args, "verbose", False)),
+        json=as_json,
+    )
+    rc = cmd_record(record_args)
+    if rc != 0:
+        # cmd_record 已输出结构化错误信封（stderr）；此处只补收据上下文。
+        return rc
+    payload = {
+        "ok": True,
+        "action": "record-from-receipt",
+        "verification": verification,
+        "status": status,
+        "receiptPath": str(receipt_path),
+        "derivedFrom": {
+            "command": command,
+            "exitCode": receipt["exitCode"],
+            "timedOut": receipt["timedOut"],
+            "durationMs": receipt["durationMs"],
+        },
+    }
+    emit_json(payload, as_json=as_json)
+    return 0
+
+
 def _zero_tests_with_selector_warning(
     command: str, evidence: str | None, project_root: Path | None
 ) -> str | None:
@@ -3641,6 +3807,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit full payload (default: compact ok/action/verification/status)",
     )
     p_record.set_defaults(func=cmd_record)
+
+    p_rfr = sub.add_parser(
+        "record-from-receipt",
+        parents=[shared_json],
+        help="write validation result from an exec result receipt (batch 2 WI-1b)",
+    )
+    p_rfr.add_argument("--change-dir", "--change", dest="change_dir", required=True)
+    p_rfr.add_argument("--receipt", required=True, help="exec result receipt path")
+    p_rfr.add_argument(
+        "--verification",
+        required=True,
+        help="verification kind recorded into the ledger (e.g. unitTest)",
+    )
+    p_rfr.add_argument(
+        "--project",
+        default=None,
+        help="project root containing .harness/config/build-profile.json (for --profile-input)",
+    )
+    p_rfr.add_argument(
+        "--profile-input",
+        default=None,
+        help="expand verificationInputs.<key> globs from build-profile as the file set",
+    )
+    p_rfr.add_argument(
+        "--files",
+        default=None,
+        help="comma-separated explicit file paths (targeted runs; bypasses --profile-input)",
+    )
+    p_rfr.add_argument(
+        "--verbose",
+        action="store_true",
+        help="emit full payload (default: compact ok/action/verification/status)",
+    )
+    p_rfr.set_defaults(func=cmd_record_from_receipt)
 
     p_diff = sub.add_parser(
         "diff-hash",
