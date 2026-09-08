@@ -951,5 +951,351 @@ class InspectLeaseStateTests(unittest.TestCase):
         self.assertIsNone(change.inspect_lease(self.project, "demo"))
 
 
+class RecoveryViewTests(unittest.TestCase):
+    """status --change 统一只读恢复视图（批次 2 WI-3a，消不对称 F）。
+
+    覆盖：轻任务/完整流程两条路径、档位来源区分、plannedPhases 进度推导
+    （含 v2 plan finalize 不写 phase.end 的结构性缺口）、ledger 聚合、
+    脏树/外来路径、租约、nextAction 状态机、多 active change 歧义、只读性。
+    """
+
+    def setUp(self) -> None:
+        self.project = Path(tempfile.mkdtemp(prefix="harness-recovery-view-"))
+        self.changes = self.project / ".harness" / "changes"
+        self.changes.mkdir(parents=True)
+        self._git_init()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.project, ignore_errors=True)
+
+    def _git_init(self) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=self.project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.project, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=self.project, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "commit.gpgsign", "false"],
+            cwd=self.project, check=True, capture_output=True,
+        )
+        (self.project / "README.md").write_text("demo\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "README.md"], cwd=self.project, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "init"],
+            cwd=self.project, check=True, capture_output=True,
+        )
+
+    def _snapshot(self) -> dict[str, tuple[int, int]]:
+        snap: dict[str, tuple[int, int]] = {}
+        for path in sorted(self.project.rglob("*")):
+            if path.is_file():
+                rel = path.relative_to(self.project).as_posix()
+                if rel.startswith(".git/"):
+                    # git status 会触碰 .git/index 的 mtime——不属于视图写入
+                    continue
+                st = path.stat()
+                snap[rel] = (st.st_mtime_ns, st.st_size)
+        return snap
+
+    def _make_full_flow_change(self, name: str = "demo-flow") -> Path:
+        """bootstrap-plan + committed journal（v2 计划完成证据）。"""
+        context = load_module("harness_context_view_test", "harness_context.py")
+        context.bootstrap_plan(self.project, change=name, executor="tester")
+        journal_dir = self.changes / name / "meta" / "publication-journals"
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        (journal_dir / f"plan_finalize%3A{name}%3Aabc123.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "operation_id": f"plan_finalize:{name}:abc123",
+                "change_key": name,
+                "state": "committed",
+                "readback": "verified",
+            }),
+            encoding="utf-8",
+        )
+        return self.changes / name
+
+    def _make_light_task_change(self, name: str = "demo-task") -> Path:
+        task = load_module("harness_task_view_test", "harness_task.py")
+        (self.project / "preexisting-dirty.txt").write_text(
+            "old dirt\n", encoding="utf-8"
+        )
+        import argparse
+        import contextlib
+        import io
+
+        args = argparse.Namespace(
+            json=True, project=str(self.project), change=name,
+            goal="demo goal", acceptance=["demo acceptance"], executor="tester",
+            tier=None,
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = task.cmd_begin(args)
+        self.assertEqual(rc, 0)
+        return self.changes / name
+
+    # ------------------------------------------------------------------
+    # 完整流程路径
+    # ------------------------------------------------------------------
+
+    def test_full_flow_plan_open_phase_identity(self) -> None:
+        """bootstrap-plan 后：plan 进行中，runId 来自未关门 phase.start。"""
+        context = load_module("harness_context_view_test", "harness_context.py")
+        context.bootstrap_plan(self.project, change="demo-flow", executor="tester")
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertTrue(view["ok"], view)
+        self.assertEqual(view["code"], "CHANGE_RECOVERY_VIEW")
+        self.assertEqual(view["entryGeneration"], "full-flow")
+        self.assertEqual(view["currentPhase"], "plan")
+        self.assertTrue(view["runId"].startswith("plan_"))
+        self.assertEqual(view["attempt"], 1)
+        self.assertFalse(view["handoffPending"])
+        # gate-policy 已由 bootstrap-plan 的 classify 写入
+        self.assertEqual(view["tier"], "standard")
+        self.assertEqual(view["tierSource"], "gate-policy-json")
+        # plan 进行中：进度 current=plan
+        progress = view["phaseProgress"]
+        self.assertEqual(progress["plannedPhases"], ["plan", "execute", "submit", "archive"])
+        self.assertEqual(progress["completed"], [])
+        self.assertEqual(progress["current"], "plan")
+        self.assertEqual(progress["pending"], ["execute", "submit", "archive"])
+        self.assertIn("plan finalize", view["nextAction"])
+
+    def test_full_flow_committed_journal_window_shows_next_phase(self) -> None:
+        """T6 式中断：finalize 已 committed、bootstrap-execute 未跑。
+
+        journal 是 plan 完成的机器证据（与 _bootstrap_v2_plan_transition
+        同判据）——视图必须把 plan 记为完成、指向 execute 与
+        bootstrap-execute，而不是让永远 open 的 plan start 压过完成事实。
+        """
+        self._make_full_flow_change("demo-flow")
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertEqual(view["currentPhase"], "execute")
+        self.assertIsNone(view["runId"])
+        self.assertFalse(view["handoffPending"])
+        progress = view["phaseProgress"]
+        self.assertEqual(progress["completed"], ["plan"])
+        self.assertEqual(progress["current"], "execute")
+        self.assertEqual(progress["pending"], ["submit", "archive"])
+        self.assertIn("bootstrap-execute", view["nextAction"])
+
+    def test_full_flow_execute_running_after_bootstrap(self) -> None:
+        """bootstrap-execute 后：execute 进行中，runId/attempt/租约齐全。"""
+        context = load_module("harness_context_view_test", "harness_context.py")
+        self._make_full_flow_change("demo-flow")
+        skills_root = self._make_bundle_identity("tester")
+        result = context.bootstrap_execute(
+            self.project, change="demo-flow", executor="tester", task=1,
+            skills_root=str(skills_root),
+        )
+        self.assertTrue(result.get("ok"), result)
+        (self.project / "src.py").write_text("x = 1\n", encoding="utf-8")
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertEqual(view["currentPhase"], "execute")
+        self.assertEqual(view["runId"], result["runId"])
+        self.assertEqual(view["attempt"], 1)
+        self.assertEqual(view["phaseProgress"]["completed"], ["plan"])
+        self.assertEqual(view["phaseProgress"]["current"], "execute")
+        self.assertIn("src.py", view["uncommittedPaths"])
+        # .harness/ 内部状态不计入脏树
+        self.assertFalse(
+            any(p.startswith(".harness/") for p in view["uncommittedPaths"])
+        )
+        self.assertEqual(view["lease"]["state"], "active")
+        self.assertEqual(view["lease"]["phase"], "execute")
+        self.assertEqual(view["lease"]["runId"], result["runId"])
+        self.assertIn("harness_gate.py close --phase execute", view["nextAction"])
+
+    def test_full_flow_gate_close_crash_window_sets_handoff_pending(self) -> None:
+        """gate close 中断窗口：phase.end 已写、交接收据未落盘。
+
+        gate close 的写入顺序是 phase.end → 租约释放 → handoff 收据；
+        在 end 与收据之间中断时，视图应报 handoffPending 并指向幂等续跑。
+        """
+        self._make_full_flow_change("demo-flow")
+        events = load_module("harness_events_view_test", "harness_events.py")
+        events.append_event(
+            self.changes / "demo-flow",
+            phase="execute",
+            type_="phase.end",
+            run_id="execute_demo",
+            attempt=1,
+            status="OK",
+        )
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertTrue(view["handoffPending"])
+        self.assertEqual(view["currentPhase"], "execute")
+        self.assertIsNone(view["runId"])
+        self.assertIn("--to-phase", view["nextAction"])
+        self.assertIn("幂等续跑", view["nextAction"])
+
+    def test_full_flow_ledger_verifications_aggregated(self) -> None:
+        """ledger 各 verification kind 的最新 attempt 状态聚合。"""
+        change_dir = self._make_full_flow_change("demo-flow")
+        state_dir = change.harness_paths.resolve_state_dir_for_contract(change_dir)
+        ledger_dir = state_dir / "evidence"
+        ledger_dir.mkdir(parents=True, exist_ok=True)
+        (ledger_dir / "verification-ledger.json").write_text(
+            json.dumps({
+                "schemaVersion": 3,
+                "validations": {
+                    "pytest": {
+                        "attempts": [
+                            {"status": "FAIL", "recordedAt": "2026-09-08T10:00:00"},
+                            {"status": "PASS", "recordedAt": "2026-09-08T11:00:00"},
+                        ]
+                    },
+                    "lint": {"status": "PASS", "recordedAt": "2026-09-08T09:00:00"},
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        verifications = view["verifications"]
+        # v3 结构取最新 attempt
+        self.assertEqual(verifications["pytest"]["status"], "PASS")
+        self.assertEqual(
+            verifications["pytest"]["recordedAt"], "2026-09-08T11:00:00"
+        )
+        # legacy 平铺结构兼容
+        self.assertEqual(verifications["lint"]["status"], "PASS")
+        self.assertTrue(view["ledgerPath"])
+
+    # ------------------------------------------------------------------
+    # 轻任务路径
+    # ------------------------------------------------------------------
+
+    def test_light_task_path_identity_and_foreign_dirt(self) -> None:
+        """轻任务：task 阶段进行中；基线内未触碰的脏文件 = foreign。"""
+        self._make_light_task_change("demo-task")
+        (self.project / "task-work.py").write_text("y = 2\n", encoding="utf-8")
+
+        view = change.change_recovery_view(self.project, "demo-task")
+
+        self.assertEqual(view["entryGeneration"], "light-task")
+        self.assertEqual(view["currentPhase"], "task")
+        self.assertTrue(view["runId"].startswith("task_"))
+        self.assertEqual(view["taskStatus"], "open")
+        # 轻任务无阶段计划
+        self.assertIsNone(view["phaseProgress"])
+        # 基线内未触碰 = foreign；任务期间新写的不算
+        self.assertEqual(view["foreignPaths"], ["preexisting-dirty.txt"])
+        self.assertIn("task-work.py", view["uncommittedPaths"])
+        self.assertIn("harness_task.py finish", view["nextAction"])
+
+    def test_light_task_tier_sources_distinguish_floor_and_adjudication(self) -> None:
+        """档位来源区分：声明 floor（declaredTier）vs finish 裁决（tier）。"""
+        task_dir = self._make_light_task_change("demo-task")
+        task_json = task_dir / "meta" / "task.json"
+        data = json.loads(task_json.read_text(encoding="utf-8"))
+        data["declaredTier"] = "minimal"
+        task_json.write_text(json.dumps(data), encoding="utf-8")
+
+        view = change.change_recovery_view(self.project, "demo-task")
+
+        # 未 finish：只有声明 floor，无裁决档位
+        self.assertEqual(view["declaredTier"], "minimal")
+        self.assertIsNone(view["tier"])
+        self.assertIsNone(view["tierSource"])
+
+        # finish 裁决后：tier 有值，来源标注 finish-adjudicated
+        data["tier"] = "standard"
+        data["status"] = "finished"
+        task_json.write_text(json.dumps(data), encoding="utf-8")
+        view = change.change_recovery_view(self.project, "demo-task")
+        self.assertEqual(view["tier"], "standard")
+        self.assertEqual(view["tierSource"], "finish-adjudicated")
+        self.assertIn("终态", view["nextAction"])
+
+    # ------------------------------------------------------------------
+    # 边界与只读性
+    # ------------------------------------------------------------------
+
+    def test_unknown_change_returns_resolve_error(self) -> None:
+        view = change.change_recovery_view(self.project, "no-such-change")
+
+        self.assertFalse(view["ok"])
+        self.assertEqual(view["code"], "CHANGE_NOT_FOUND")
+
+    def test_view_is_strictly_read_only(self) -> None:
+        """只读性：视图不写任何文件（快照对比 mtime+size）。"""
+        self._make_full_flow_change("demo-flow")
+        (self.project / "src.py").write_text("x = 1\n", encoding="utf-8")
+        before = self._snapshot()
+
+        change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertEqual(before, self._snapshot())
+
+    def _make_bundle_identity(self, agent: str) -> Path:
+        import hashlib
+
+        skills_root = self.project / ".agents" / "skills"
+        skills_root.mkdir(parents=True, exist_ok=True)
+        (skills_root / ".harness-build.json").write_text(
+            json.dumps({
+                "schemaVersion": 1, "agent": agent, "overlay": "none",
+                "coreHash": "a" * 16,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (self.project / ".harness" / "context-index.json").write_text(
+            json.dumps({
+                "schema_version": 2,
+                "project": {"adapters": {agent: {"skills_root": ".agents/skills"}}},
+                "skill_bundles": {
+                    agent: {
+                        "registry_version": "0.2.80",
+                        "bundle_hash": "sha256:" + "b" * 64,
+                    }
+                },
+            }) + "\n",
+            encoding="utf-8",
+        )
+        build_hash = hashlib.sha256(
+            (skills_root / ".harness-build.json").read_bytes()
+        ).hexdigest()
+        state = (
+            self.project / ".harness" / "state" / "local"
+            / "installed-harness-bundle.json"
+        )
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps({
+                "schema_version": 4,
+                "profiles": {agent: "general"},
+                "manifests": [{
+                    "adapter": agent,
+                    "profile": "general",
+                    "bundle_version": "0.2.80",
+                    "bundle_manifest_hash": "sha256:" + "b" * 64,
+                }],
+                "files": [{
+                    "owner": agent,
+                    "target_path": ".agents/skills/.harness-build.json",
+                    "sha256": build_hash,
+                }],
+            }) + "\n",
+            encoding="utf-8",
+        )
+        return skills_root
+
+
 if __name__ == "__main__":
     unittest.main()
