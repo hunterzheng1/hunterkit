@@ -3261,7 +3261,9 @@ def cmd_record_from_receipt(args: argparse.Namespace) -> int:
     evidence = _receipt_evidence(receipt["outputTail"])
     # 沿 harness_task.py _record_ledger_entry 的 Namespace 构造模式：
     # 复用 cmd_record 全部语义（ownership 检查、profile 展开、ledger v3
-    # 迁移、场景绑定），不复制其逻辑。
+    # 迁移、场景绑定），不复制其逻辑。cmd_record 的 stdout 输出被捕获
+    # 吞掉——record-from-receipt 只输出自己的信封，避免两个 JSON 拼接
+    # 破坏机器可读性；其 stderr（emit_error + WARNING）原样透传。
     record_args = argparse.Namespace(
         change_dir=args.change_dir,
         verification=verification,
@@ -3296,7 +3298,25 @@ def cmd_record_from_receipt(args: argparse.Namespace) -> int:
         verbose=bool(getattr(args, "verbose", False)),
         json=as_json,
     )
-    rc = cmd_record(record_args)
+
+    class _Capture:
+        def __init__(self) -> None:
+            self.chunks: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.chunks.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            pass
+
+    captured_stdout = _Capture()
+    original_stdout = sys.stdout
+    sys.stdout = captured_stdout  # type: ignore[assignment]
+    try:
+        rc = cmd_record(record_args)
+    finally:
+        sys.stdout = original_stdout  # type: ignore[assignment]
     if rc != 0:
         # cmd_record 已输出结构化错误信封（stderr）；此处只补收据上下文。
         return rc

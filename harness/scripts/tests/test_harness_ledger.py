@@ -2593,5 +2593,347 @@ class V2ScenarioManifestFailsClosedTests(unittest.TestCase):
         self.assertEqual(result["code"], "SCENARIO_MANIFEST_V2_UNSUPPORTED")
 
 
+class RecordFromReceiptTests(unittest.TestCase):
+    """批次 2 WI-1b：record-from-receipt（证据直接采集）。"""
+
+    @staticmethod
+    def _receipt_payload(
+        *,
+        exit_code: int = 0,
+        timed_out: bool = False,
+        duration_ms: int = 250,
+        output_tail: str = "Tests run: 3, Failures: 0\n",
+        argv: list[str] | None = None,
+    ) -> dict:
+        return {
+            "schemaVersion": 1,
+            "action": "exec-result",
+            "completedAtEpochSeconds": 1788869139,
+            "argv": argv or ["npm", "test", "--", "unit"],
+            "profile": "safe",
+            "exitCode": exit_code,
+            "timedOut": timed_out,
+            "durationMs": duration_ms,
+            "outputTail": output_tail,
+            "outputTailTruncated": False,
+            "processTreeIsolated": True,
+        }
+
+    def _setup_change(self, tmp: str) -> tuple[Path, Path, Path]:
+        project = Path(tmp)
+        change = project / ".harness" / "changes" / "rfr-task"
+        receipts = change / "evidence" / "receipts"
+        receipts.mkdir(parents=True)
+        src = project / "src" / "app.py"
+        src.parent.mkdir(parents=True)
+        src.write_text("x = 1\n", encoding="utf-8")
+        return project, change, src
+
+    def _record_from_receipt(
+        self,
+        change: Path,
+        receipt_path: Path,
+        verification: str = "unitTest",
+        *,
+        files: str | None = None,
+        project: Path | None = None,
+    ) -> tuple[int, dict | None, str]:
+        from io import StringIO
+
+        argv = [
+            "--json",
+            "record-from-receipt",
+            "--change-dir",
+            str(change),
+            "--receipt",
+            str(receipt_path),
+            "--verification",
+            verification,
+        ]
+        if files:
+            argv += ["--files", files]
+        if project:
+            argv += ["--project", str(project)]
+        buf = StringIO()
+        err = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(err):
+            code = harness_ledger.main(argv)
+        raw = buf.getvalue().strip()
+        payload = json.loads(raw) if raw else None
+        return code, payload, err.getvalue()
+
+    def _load_entry(self, change: Path, verification: str) -> dict:
+        ledger_path = change / "evidence" / "verification-ledger.json"
+        data = json.loads(ledger_path.read_text(encoding="utf-8"))
+        return data["validations"][verification]
+
+    def test_ok_receipt_records_matching_ledger_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change, src = self._setup_change(tmp)
+            receipt_path = change / "evidence" / "receipts" / "unitTest.json"
+            receipt_path.write_text(
+                json.dumps(self._receipt_payload()), encoding="utf-8"
+            )
+
+            code, payload, _ = self._record_from_receipt(
+                change, receipt_path, files=str(src), project=project
+            )
+            self.assertEqual(code, 0, msg=payload)
+            self.assertEqual(payload["action"], "record-from-receipt")
+            self.assertEqual(payload["status"], "OK")
+            self.assertEqual(payload["derivedFrom"]["exitCode"], 0)
+            self.assertFalse(payload["derivedFrom"]["timedOut"])
+
+            entry = self._load_entry(change, "unitTest")
+            # ledger 条目与收据逐项对账
+            self.assertEqual(entry["status"], "OK")
+            self.assertEqual(entry["exitCode"], 0)
+            self.assertEqual(entry["durationMs"], 250)
+            self.assertEqual(entry["command"], "npm test -- unit")
+            self.assertEqual(entry["evidence"], "Tests run: 3, Failures: 0")
+            # --project 给定时 inputsFiles 是项目相对路径（既有语义）
+            self.assertEqual(entry["inputsFiles"], ["src/app.py"])
+
+    def test_status_derivation_exit_code_and_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change, src = self._setup_change(tmp)
+            # exitCode != 0 → FAIL
+            fail_receipt = change / "evidence" / "receipts" / "fail.json"
+            fail_receipt.write_text(
+                json.dumps(
+                    self._receipt_payload(
+                        exit_code=1, output_tail="Tests run: 2, Failures: 1\n"
+                    )
+                ),
+                encoding="utf-8",
+            )
+            code, payload, _ = self._record_from_receipt(
+                change, fail_receipt, files=str(src), project=project
+            )
+            self.assertEqual(code, 0, msg=payload)
+            self.assertEqual(self._load_entry(change, "unitTest")["status"], "FAIL")
+
+            # timedOut=True → FAIL（即使 exitCode 语义上是超时码）
+            timeout_receipt = change / "evidence" / "receipts" / "timeout.json"
+            timeout_receipt.write_text(
+                json.dumps(
+                    self._receipt_payload(exit_code=124, timed_out=True, output_tail="")
+                ),
+                encoding="utf-8",
+            )
+            code, payload, _ = self._record_from_receipt(
+                change, timeout_receipt, files=str(src), project=project
+            )
+            self.assertEqual(code, 0, msg=payload)
+            entry = self._load_entry(change, "unitTest")
+            self.assertEqual(entry["status"], "FAIL")
+            # 空输出 → 占位说明（evidence 必填非空）
+            self.assertEqual(entry["evidence"], "(no captured output; see runner logs)")
+
+    def test_invalid_receipt_fails_with_field_path_and_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change, _ = self._setup_change(tmp)
+            cases = [
+                # (payload, expected fieldPath)
+                ("{not json", "receipt"),
+                (
+                    json.dumps({"schemaVersion": 2, "action": "exec-result"}),
+                    "schemaVersion",
+                ),
+                (
+                    json.dumps({"schemaVersion": 1, "action": "managed-exec"}),
+                    "action",
+                ),
+                (
+                    json.dumps(
+                        {
+                            "schemaVersion": 1,
+                            "action": "exec-result",
+                            "exitCode": 0,
+                            "timedOut": False,
+                            "durationMs": 1,
+                            "outputTail": "",
+                        }
+                    ),
+                    "argv",
+                ),
+                (
+                    json.dumps(
+                        {
+                            "schemaVersion": 1,
+                            "action": "exec-result",
+                            "argv": ["x"],
+                            "exitCode": "0",
+                            "timedOut": False,
+                            "durationMs": 1,
+                            "outputTail": "",
+                        }
+                    ),
+                    "exitCode",
+                ),
+            ]
+            for index, (raw, expected_field) in enumerate(cases):
+                bad = change / "evidence" / "receipts" / f"bad-{index}.json"
+                bad.write_text(raw, encoding="utf-8")
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    code = harness_ledger.main(
+                        [
+                            "--json",
+                            "record-from-receipt",
+                            "--change-dir",
+                            str(change),
+                            "--receipt",
+                            str(bad),
+                            "--verification",
+                            "unitTest",
+                        ]
+                    )
+                self.assertEqual(code, 1, msg=f"case {index}: {raw[:60]}")
+                envelope = json.loads(stderr.getvalue())
+                self.assertEqual(envelope["code"], "RECEIPT_INVALID")
+                self.assertEqual(envelope["fieldPath"], expected_field)
+                self.assertIn("recoveryAction", envelope)
+                # 旧路保留为故障出口：recoveryAction 提到手工 record
+                self.assertIn("record", envelope["recoveryAction"])
+            # 坏收据一律不写 ledger
+            self.assertFalse(
+                (change / "evidence" / "verification-ledger.json").is_file()
+            )
+
+    def test_targeted_files_record_incremental_identity(self) -> None:
+        """定向路径：--files 显式（不经 profile-input）→ inputsFiles 从显式文件算。
+
+        对照 harness_task.py 定向记账语义：不用 unitTestFull 的 profile
+        输入集给定向项记账——输入集声称覆盖全部而实际只测了部分是假证据。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change, src = self._setup_change(tmp)
+            test_file = project / "src" / "test_app.py"
+            test_file.write_text("def test_x():\n    pass\n", encoding="utf-8")
+            receipt_path = change / "evidence" / "receipts" / "unitTest.json"
+            receipt_path.write_text(
+                json.dumps(
+                    self._receipt_payload(
+                        argv=["python", "-m", "unittest", "test_app"]
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload, _ = self._record_from_receipt(
+                change,
+                receipt_path,
+                files=f"{src},{test_file}",
+                project=project,
+            )
+            self.assertEqual(code, 0, msg=payload)
+            entry = self._load_entry(change, "unitTest")
+            # --project 给定时 inputsFiles 是项目相对路径（既有语义）
+            self.assertEqual(
+                entry["inputsFiles"], ["src/app.py", "src/test_app.py"]
+            )
+            # 定向（无 profile-input/scope）→ coverage 推导为 incremental
+            self.assertEqual(entry["coverage"], "incremental")
+            self.assertEqual(entry["command"], "python -m unittest test_app")
+
+    def test_ownership_check_inherited_from_record(self) -> None:
+        """frozen_ownership_check 拒绝时错误信封与手工 record 一致。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+            change = project / ".harness" / "changes" / "freeze-rfr"
+            state = project / ".harness" / "state" / "changes" / "freeze-rfr"
+            change.joinpath("meta").mkdir(parents=True)
+            contract = {
+                "schemaVersion": 2,
+                "changeId": "freeze-rfr",
+                "lifecycle": {"status": "active"},
+                "ownership": {
+                    "productPaths": ["src/"],
+                    "staticEvidencePaths": [".harness/changes/freeze-rfr/"],
+                    "excludedPaths": [".harness/state/"],
+                },
+                "stateOwnership": {
+                    "contractRoot": ".harness/changes/freeze-rfr",
+                    "runtimeRoot": ".harness/state/changes/freeze-rfr",
+                },
+            }
+            change.joinpath("meta/change-context.json").write_text(
+                json.dumps(contract), encoding="utf-8"
+            )
+            capsule = {
+                "schemaVersion": 1,
+                "phase": "execute",
+                "runId": "run-1",
+                "ownershipHash": harness_ledger.ownership_hash(contract),
+                "createdAt": "2026-08-09T10:00:00+00:00",
+            }
+            capsule_path = state / "runtime" / "phase-context" / "run-1.json"
+            capsule_path.parent.mkdir(parents=True)
+            capsule_path.write_text(json.dumps(capsule), encoding="utf-8")
+            # 冻结后改契约 → ownership 漂移
+            contract["ownership"]["productPaths"].append("tests/")
+            change.joinpath("meta/change-context.json").write_text(
+                json.dumps(contract), encoding="utf-8"
+            )
+            receipt_path = change / "evidence" / "receipts" / "unitTest.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(
+                json.dumps(self._receipt_payload()), encoding="utf-8"
+            )
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                code = harness_ledger.main(
+                    [
+                        "--json",
+                        "record-from-receipt",
+                        "--change-dir",
+                        str(change),
+                        "--receipt",
+                        str(receipt_path),
+                        "--verification",
+                        "unitTest",
+                    ]
+                )
+            self.assertEqual(code, 1)
+            envelope = json.loads(stderr.getvalue())
+            self.assertEqual(
+                envelope["code"], "OWNERSHIP_CHANGED_BEFORE_VERIFICATION"
+            )
+            self.assertFalse(
+                (change / "evidence" / "verification-ledger.json").is_file()
+            )
+
+    def test_rerun_same_receipt_overwrites_without_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change, src = self._setup_change(tmp)
+            receipt_path = change / "evidence" / "receipts" / "unitTest.json"
+            receipt_path.write_text(
+                json.dumps(self._receipt_payload()), encoding="utf-8"
+            )
+
+            for _ in range(2):
+                code, payload, _ = self._record_from_receipt(
+                    change, receipt_path, files=str(src), project=project
+                )
+                self.assertEqual(code, 0, msg=payload)
+
+            data = json.loads(
+                (change / "evidence" / "verification-ledger.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            # 幂等：同 verification 只有一个条目，无重复
+            self.assertIn("unitTest", data["validations"])
+            self.assertEqual(len(data["validations"]), 1)
+            targets = data.get("verificationTargets", {})
+            unit_targets = [
+                key for key, value in targets.items() if value.get("verification") == "unitTest"
+            ]
+            self.assertEqual(len(unit_targets), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
