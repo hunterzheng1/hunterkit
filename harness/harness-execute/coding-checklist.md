@@ -39,7 +39,7 @@ description: harness-execute 的执行检查清单。仅在编码执行时读取
 - [ ] 检查构建配置完整性（worktree 中确认构建配置文件存在，如 Java 的 `.mvn/maven.config`、`settings.xml`，前端的 `package.json`/lockfile 等）
 - [ ] 依赖模块预安装（worktree 中检查上游依赖是否已安装，如 Java 的 `mvn install`、前端的 `npm install`/lockfile 等）
 - [ ] 代码探索优先用 `codegraph_explore`，仅在返回不完整时补充 Read
-- [ ] `harness_context.py prepare/begin` 均带 `--project .` 与 `--change <id>`（缺 `--project` 会被 argparse 直接拒）
+- [ ] execute 入口用一条命令 `harness_context.py bootstrap-execute --project . --change <id> --executor <tool> --json`（返回 `EXECUTE_BOOTSTRAPPED` 即就绪；foundation-gate pending 时带 `--task N`）；失败时按信封 `recoveryAction` 走原三连命令路径排障（`prepare`/`begin` 均带 `--project .` 与 `--change <id>`，缺 `--project` 会被 argparse 直接拒）
 - [ ] 交接凭证缺失时**不自行拼造**：v2 计划由 `prepare` 依据 committed 发布 journal 自动补录；仍报 `HANDOFF_REQUIRED`/`LEGACY_BOOTSTRAP_REQUIRED` 即代表发布证据不存在，回 plan 阶段查，不得用 `classify + configure-plan + close` 现编凭证
 - [ ] `harness_gate.py begin --phase run` 已返回 Plan handoff 校验通过并自动 append `phase.start`；不得手工写事件绕过
 - [ ] 门禁报 `SCENARIO_MANIFEST_V2_UNSUPPORTED` 时按 `missingFields` 回规划阶段补齐场景字段后重新发布；**不得**手改 `meta/scenario-manifest.json`（派生产物，手改必致哈希漂移）

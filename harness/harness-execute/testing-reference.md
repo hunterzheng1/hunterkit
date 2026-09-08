@@ -740,6 +740,11 @@ TEST_<change-name>_<timestamp>_<short-random>
 > ⚠️ **`--project` 一律传路径，不传项目名**（在项目根就写 `--project .`）。传项目名会解析成 `<cwd>/<名字>` 并报 `PROJECT_ROOT_INVALID` / `EXECUTION_ROOT_INVALID`。
 
 ```powershell
+# execute 入口（推荐路径，批次 2 WI-2）：一条命令完成 prepare → context begin → gate begin（幂等）
+python <skills-root>/scripts/harness_context.py bootstrap-execute --project . --change <cn> --executor <tool> --json [--task N]
+#   返回 EXECUTE_BOOTSTRAPPED 即就绪；BOOTSTRAP_EXECUTE_*_FAILED 时按 recoveryAction 排障，
+#   原三连命令路径保留为出口（各步幂等，从失败环节起原样重试）。
+
 # gate begin/close（phase=test；--task 仅 checkpoint 启用时必需；close 不需要 --skills-root）
 python <skills-root>/scripts/harness_gate.py begin --change <cn> --phase test --skills-root <skills-root> [--task N]
 python <skills-root>/scripts/harness_gate.py close --change <cn> --phase test --status OK --to-phase <plannedPhases 中 test 的后继> --executor <tool> [--task N]
@@ -768,6 +773,9 @@ python <skills-root>/scripts/harness_ledger.py scenario-receipt-template --chang
 |------|------|------|
 | `unsupported status: PASS` | ledger status 无 PASS | 改用 `ok` / `fail` / `not_run` |
 | `TASK_NUMBER_REQUIRED` | 该 change 启用了 checkpoint（如 foundation-gate pending） | 补 `--task N` |
+| `BOOTSTRAP_EXECUTE_PREPARE_FAILED`（bootstrap-execute） | prepare 阶段失败（常见 `HANDOFF_REQUIRED`：无 committed 发布 journal） | 看 `error.code`；`HANDOFF_REQUIRED` 回 plan 确认发布完成，不得手工造凭证；其余按 recoveryAction 三连命令路径排障 |
+| `BOOTSTRAP_EXECUTE_BEGIN_FAILED`（bootstrap-execute） | context begin 交接校验失败 | 按 recoveryAction 三连命令路径排障；各步幂等，从失败环节起原样重试 |
+| `BOOTSTRAP_EXECUTE_GATE_BEGIN_FAILED`（bootstrap-execute） | gate begin 失败（租约冲突/身份/`--task` 缺失等） | 看 `error.code` 定位（如 `TASK_NUMBER_REQUIRED` 补 `--task`）；按 recoveryAction 排障 |
 | skills-root / BUNDLE_IDENTITY_* | `begin` 未传或传了 `.../scripts` 子目录（`close` 不接受该参数） | 仅对 `begin` 显式传 adapter 根：`.cursor/skills` / `.claude/skills`（含 `.harness-build.json`） |
 | `--profile-input` 指向文件路径 | 参数语义是 verification key | 传 `compile` / `unitTestFull` 等 key，不是 JSON 路径 |
 | `RECEIPT_INVALID`（record-from-receipt） | 收据损坏/缺字段/错 action（如误用 runtime receipt） | 按 `fieldPath` 核对；重跑 exec `--result-receipt` 生成新收据，或按 `recoveryAction` 回退手工 record 并在事件 note 说明 |
