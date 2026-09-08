@@ -745,8 +745,15 @@ python <skills-root>/scripts/harness_gate.py begin --change <cn> --phase test --
 python <skills-root>/scripts/harness_gate.py close --change <cn> --phase test --status OK --to-phase <plannedPhases 中 test 的后继> --executor <tool> [--task N]
 
 # ledger 记录 / 复用（--profile-input = verification key，不是文件路径）
+# 推荐路径（批次 2 WI-1）：exec 带 --result-receipt 落结果收据，record-from-receipt 消费——
+# status/command/exitCode/durationMs/evidence 全部来自真实执行，无需手工转录。
+python <skills-root>/scripts/harness_test_runner.py exec --project . --timeout-seconds <上限> --result-receipt "<change-dir>/evidence/receipts/<verification>.json" -- <构建命令及参数>
+python <skills-root>/scripts/harness_ledger.py record-from-receipt --change-dir <dir> --receipt "<change-dir>/evidence/receipts/<verification>.json" --verification unitTestFull --profile-input unitTestFull --project <project>
+# 定向验证（只测部分文件）用 --files 显式声明输入集，不用 profile 输入集冒充：
+python <skills-root>/scripts/harness_ledger.py record-from-receipt --change-dir <dir> --receipt "<change-dir>/evidence/receipts/<verification>.json" --verification unitTest --files "<变更源文件,测试文件>" --project <project>
+# 手工 record 仅两种场景：收据校验失败（RECEIPT_INVALID，按 recoveryAction 重跑 exec 或回退此路）；
+# 无收据的受控例外（如宿主 CI 导入证据）。两者都要在事件 note 里说明原因。
 python <skills-root>/scripts/harness_ledger.py record --change-dir <dir> --verification unitTestFull --status ok --command "<完整命令>" --exit-code 0 --duration-ms 120000 --evidence "Tests run: N, Failures: 0" --coverage full --files "packages/core/src/index.ts"
-python <skills-root>/scripts/harness_ledger.py record --change-dir <dir> --verification browserTest --status ok --command "<真实栈 Playwright 命令>" --exit-code 0 --duration-ms 120000 --evidence "Browser E2E: N passed, 0 failed" --coverage module --files "<Playwright 配置与受测 spec>"
 python <skills-root>/scripts/harness_ledger.py can-reuse --change-dir <dir> --verification unitTestFull --profile-input unitTestFull --project <project>
 
 # scenario-manifest schemaVersion 2：绑定场景必须带 receipt，先生成骨架再 record
@@ -763,6 +770,7 @@ python <skills-root>/scripts/harness_ledger.py scenario-receipt-template --chang
 | `TASK_NUMBER_REQUIRED` | 该 change 启用了 checkpoint（如 foundation-gate pending） | 补 `--task N` |
 | skills-root / BUNDLE_IDENTITY_* | `begin` 未传或传了 `.../scripts` 子目录（`close` 不接受该参数） | 仅对 `begin` 显式传 adapter 根：`.cursor/skills` / `.claude/skills`（含 `.harness-build.json`） |
 | `--profile-input` 指向文件路径 | 参数语义是 verification key | 传 `compile` / `unitTestFull` 等 key，不是 JSON 路径 |
+| `RECEIPT_INVALID`（record-from-receipt） | 收据损坏/缺字段/错 action（如误用 runtime receipt） | 按 `fieldPath` 核对；重跑 exec `--result-receipt` 生成新收据，或按 `recoveryAction` 回退手工 record 并在事件 note 说明 |
 | `record requires --files or a non-empty --profile-input file set` | 缺少输入文件集 | 补 `--files` 或 `--profile-input <key> --project <project>` |
 | `--profile-input requires --project` | can-reuse/record 展开 profile 需要项目根 | 补 `--project <project>` |
 | `record` 缺 `--duration-ms` / `--evidence` | 参数为必填 | 按模板补齐 |

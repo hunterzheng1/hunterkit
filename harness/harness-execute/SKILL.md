@@ -58,7 +58,7 @@ disallowed-tools:
 **Fixback 步骤序列**（0.4.11 起文档化；每步失败都有 recoveryAction）：launch-review 启动批次 → 托管 RED 会话（`harness_runtime.py run-start --verification fixback-red --product-identity <批次 baseProductIdentity，缺省自动注入> -- ...`）→ `harness_fixback.py evidence-template` 生成证据 + `register-evidence` 注册 → 修复 → GREEN 会话同法 → 逐 issue `resolve-issue` → `harness_review.py write-dispositions` 处置 → affected 验证会话 + review 收据 → `harness_fixback.py close --change-dir <change-dir> --batch-id <批次> --final-product-identity <身份>`（批次关闭会同步把 fixback-session 置 CLOSED）→ `harness_gate.py close --phase execute`（fixback 回环自动派生回 submit）。Windows 上命令名写 `mvn` 会 WinError 2——0.4.11 起 launcher 自动解析 .cmd/.exe，更早版本请写全路径。
 0.5. **测试基础设施探测**与**命令执行模式 preflight** → `testing-reference.md`「命令执行模式 preflight」；测试基线已由 gate begin 内部建立，不得再次执行 guard begin
 1. **变更簇 TDD** — `protocols.md` `run-tdd-protocol`；批量 RED/GREEN；按需 `change-cluster-review-protocol`
-2. 构建验证 + **仅**通过 `harness_ledger.py record` 写 ledger（禁止 Write/Edit `verification-ledger.json`）；profile 缺失或陈旧时先 `harness_preflight.py detect --project . --json`；`record --project . --profile-input <key>` 从同一 target 推导 scope、coverage、规范命令与输入闭包
+2. 构建验证 + 写 ledger（禁止 Write/Edit `verification-ledger.json`）。**推荐路径（批次 2 WI-1）**：`exec` 带 `--result-receipt <change-dir>/evidence/receipts/<verification>.json` 落结果收据，再 `harness_ledger.py record-from-receipt --change-dir <dir> --receipt <收据> --verification <kind>` 消费——status/command/exitCode/durationMs/evidence 全部来自真实执行，无需手工转录；定向验证加 `--files "<变更源,测试文件>"`。手工 `record` 仅用于收据校验失败（`RECEIPT_INVALID`）的回退与无收据的受控例外，并在事件 note 说明原因。profile 缺失或陈旧时先 `harness_preflight.py detect --project . --json`；`--profile-input <key>` 从同一 target 推导 scope、coverage、规范命令与输入闭包
 3. **验证执行**：单元测试可复用则跳过（`harness_ledger.py can-reuse`）；接口测试**强制批量执行器**一次跑完全部场景；数据兼容验证按场景表执行 → `testing-reference.md`
 4. **场景覆盖检查**（场景表映射，禁止用用例数冒充场景数）
 5. **关门检查**（10 项）→ 只执行一次 `harness_gate.py close`；`--to-phase` 可省略——计划后继唯一（排除 fixback 自环）时自动派生并交接（输出含 `derivedToPhase`）。仅 fixback 回环时显式传 `--to-phase execute`；fixback 批次的 execute 关门自动派生 review 的后继（submit），不会错误地再回一轮 review（0.4.11 起）。该命令内部关闭 test guard、写 `phase.end`、释放租约、写 handoff 并补传事件；不得再单独调用 test-guard/context close。失败时按结构化 `recoveryAction` 原样重试，已完成步骤幂等复用。
@@ -67,10 +67,10 @@ disallowed-tools:
 
 > 关门脚本与本规则一致：`harness_gate.py close --phase execute` 的 C9 场景覆盖要求全部 `ownerPhase=execute` 的必需场景有通过 receipt——包括本属原 run 半段的编码验证与原 test 半段的接口/兼容验证，这正是两阶段合并的语义。
 
-**构建/测试执行入口**：所有构建与测试命令（mvn / gradle / npm test / pytest 等）必须经 `harness_test_runner.py exec` 发起，**禁止**用 `powershell.exe -Command` 直接裸跑：
+**构建/测试执行入口**：所有构建与测试命令（mvn / gradle / npm test / pytest 等）必须经 `harness_test_runner.py exec` 发起，**禁止**用 `powershell.exe -Command` 直接裸跑。要写 ledger 的验证加 `--result-receipt`（收据落 change 目录 `evidence/receipts/`，随归档 manifest 覆盖；timeout 也写——失败是验证证据）：
 
 ```text
-python <skills-root>/scripts/harness_test_runner.py exec --project . --timeout-seconds <预估上限> -- <构建命令及参数>
+python <skills-root>/scripts/harness_test_runner.py exec --project . --timeout-seconds <预估上限> --result-receipt "<change-dir>/evidence/receipts/<verification>.json" -- <构建命令及参数>
 ```
 
 资源档位是硬合同（`safe` 默认；`system`/`full` 需用户明确授权或 `--confirm-resource-intensive`）；Python `unittest` 必须逐模块隔离模式（`harness_test_runner.py unittest --profile safe --tests-dir <目录>`），并发上限由 runner 注入的 `HARNESS_TEST_MAX_WORKERS` 决定，不得自行提升。返回 `TEST_RUN_ALREADY_ACTIVE` 说明已有构建在跑：等待或查明持有者，不得绕开锁另起并行构建。完整约束 → `testing-checklist.md`「0.0-A 资源安全档位」。
@@ -103,7 +103,7 @@ python <skills-root>/scripts/harness_test_guard.py record --project . --change-d
 | **文档输入** | 只读 `.harness/changes/<cn>/`；禁止 `docs/superpowers/` |
 | **变更簇 TDD** | 一簇一次 RED/GREEN；低价值项豁免；新分支必须 RED |
 | **RED/GREEN** | RED 须有效；静态验证 ≠ 测试通过 |
-| **探测/ledger** | 基础设施先探测；每次构建/测试经 `harness_ledger.py record`；禁止手写 ledger JSON |
+| **探测/ledger** | 基础设施先探测；构建/测试经 `exec --result-receipt` + `record-from-receipt`（手工 `record` 仅回退/受控例外）；禁止手写 ledger JSON |
 | **Gate/Guard** | 跨 Agent/阶段先用 `harness_context.py prepare/begin`；阶段门禁统一用 `harness_gate.py begin/close`；gate 内部负责 guard begin/close（`harness_test_guard.py begin` / `harness_test_guard.py close` 仅由 gate 调用，不构成模型执行步骤），模型只在需要记录测试来源或修复时调用 guard 的 `record/stage/mark` |
 | **关门/状态** | 10 项关门检查；仅 execute-owned P0 静态-only 导致 WARN；review/submit-owned 待办正常移交 |
 | **Worktree** | `requested=true` 时代码只写 worktree |
