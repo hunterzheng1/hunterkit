@@ -529,8 +529,13 @@ describe("Stage 03 Push/Pull CLI commands", () => {
   });
 
   it("fails closed in the default unavailable Port without old HTTP fallback", async () => {
+    // 临时 cwd 隔离：仓库根可能存在真实 .harness/credentials.local.yaml
+    // （gitignore 本地态），readLocalCredentials 会把 RemoteSync 配齐，
+    // 端口不再 UNAVAILABLE——用例语义是「默认未配置」，必须离线于本机状态。
+    const root = await mkdtemp(join(tmpdir(), "hh-pushpull-closed-"));
     const deps = dependencies(vi.fn());
     delete deps.pushPull;
+    deps.cwd = root;
 
     expect(await runCli([
       "harness-push", "--scope", "rules", "--dry-run", "--json"
