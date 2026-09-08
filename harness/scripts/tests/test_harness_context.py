@@ -1753,5 +1753,228 @@ class SamePhaseAdoptionTests(unittest.TestCase):
             self.assertEqual(self._adoptions(project, "change"), [])
 
 
+class BootstrapExecuteTests(unittest.TestCase):
+    """批次 2 WI-2a：bootstrap-execute 一条命令完成 execute 阶段引导。
+
+    消除不对称 C（execute 入口三连命令，参数各自必填，漏参=白跑一轮）。
+    冻结的契约：
+    - 正常路径返回紧凑摘要（runId/attempt/tier/租约 TTL/测试基线状态）；
+    - 幂等：重跑复用同一 runId、不追加第二条 phase.start（与 bootstrap-plan
+      同语义——换 run-id 会让 finalize 的生命周期身份校验 fail-closed）；
+    - 失败信封保留原错误码 + recoveryAction 指回原三连命令路径（§10.1
+      排障出口保留，旧 change 沿用原序列）。
+    """
+
+    @staticmethod
+    def _events(change_dir: Path) -> list[dict]:
+        import sys
+
+        sys.path.insert(0, str(SCRIPT.parent))
+        import harness_events as he
+
+        return he.load_events(he.events_path(change_dir))
+
+    def _make_project(self) -> tuple[Path, Path, Path]:
+        """已 init 的 harness 项目 + 已 bootstrap-plan 的 change + bundle 身份。
+
+        返回 (project, change_dir, skills_root)。bundle 身份三件套
+        （.harness-build.json / context-index.json / installed-harness-bundle.json）
+        按 validate_identity 的真实校验链构造（bare hexdigest，无 sha256: 前缀）。
+        """
+        import hashlib
+
+        tmp = Path(tempfile.mkdtemp(prefix="harness-bootstrap-exec-"))
+        project = tmp / "proj"
+        project.mkdir()
+        init_repo(project)
+        (project / ".harness" / "changes").mkdir(parents=True)
+
+        CONTEXT.bootstrap_plan(project, change="demo-change", executor="codebuddy")
+        change_dir = project / ".harness" / "changes" / "demo-change"
+
+        # v2 计划完成证据：committed 发布 journal（prepare 据此补录交接凭证）
+        journal_dir = change_dir / "meta" / "publication-journals"
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        (journal_dir / "plan_finalize%3Ademo%3Aabc123.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "operation_id": "plan_finalize:demo-change:abc123",
+                "change_key": "demo-change",
+                "state": "committed",
+                "readback": "verified",
+            }),
+            encoding="utf-8",
+        )
+
+        skills_root = project / ".agents" / "skills"
+        skills_root.mkdir(parents=True)
+        (skills_root / ".harness-build.json").write_text(
+            json.dumps({
+                "schemaVersion": 1,
+                "agent": "codebuddy",
+                "overlay": "none",
+                "coreHash": "a" * 16,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (project / ".harness" / "context-index.json").write_text(
+            json.dumps({
+                "schema_version": 2,
+                "project": {"adapters": {"codebuddy": {"skills_root": ".agents/skills"}}},
+                "skill_bundles": {
+                    "codebuddy": {
+                        "registry_version": "0.2.80",
+                        "bundle_hash": "sha256:" + "b" * 64,
+                    }
+                },
+            }) + "\n",
+            encoding="utf-8",
+        )
+        build_hash = hashlib.sha256(
+            (skills_root / ".harness-build.json").read_bytes()
+        ).hexdigest()
+        state = project / ".harness" / "state" / "local" / "installed-harness-bundle.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps({
+                "schema_version": 4,
+                "profiles": {"codebuddy": "general"},
+                "manifests": [{
+                    "adapter": "codebuddy",
+                    "profile": "general",
+                    "bundle_version": "0.2.80",
+                    "bundle_manifest_hash": "sha256:" + "b" * 64,
+                }],
+                "files": [{
+                    "owner": "codebuddy",
+                    "target_path": ".agents/skills/.harness-build.json",
+                    "sha256": build_hash,
+                }],
+            }) + "\n",
+            encoding="utf-8",
+        )
+        return project, change_dir, skills_root
+
+    def _bootstrap(self, project, change_dir, skills_root, **kwargs):
+        return CONTEXT.bootstrap_execute(
+            project,
+            change="demo-change",
+            executor="codebuddy",
+            skills_root=str(skills_root),
+            executor_tool="codebuddy",
+            **kwargs,
+        )
+
+    def test_normal_path_returns_compact_summary_and_starts_phase(self) -> None:
+        project, change_dir, skills_root = self._make_project()
+
+        result = self._bootstrap(project, change_dir, skills_root, task=1)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["code"], "EXECUTE_BOOTSTRAPPED")
+        self.assertEqual(result["changeName"], "demo-change")
+        # v2 identity：必须小写字母开头，裸 UUID 有 10/16 概率数字开头被拒
+        self.assertRegex(result["runId"], r"^execute_[a-z0-9]")
+        self.assertEqual(result["attempt"], 1)
+        self.assertFalse(result["reused"])
+        # tier 来自 gate-policy 权威（bootstrap-plan 的 classify 已写入）
+        self.assertEqual(result["tier"], "standard")
+        self.assertEqual(result["leaseTtlSeconds"], 3600)
+        # 测试基线 guard 已由 gate begin 内部建立
+        self.assertTrue(result["testBaseline"]["ok"])
+        self.assertEqual(result["testBaseline"]["code"], "SNAPSHOT_CAPTURED")
+
+        starts = [
+            e for e in self._events(change_dir)
+            if e.get("phase") == "execute" and e.get("type") == "phase.start"
+        ]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts[0].get("run_id"), result["runId"])
+
+    def test_rerun_reuses_run_id_without_second_phase_start(self) -> None:
+        project, change_dir, skills_root = self._make_project()
+
+        first = self._bootstrap(project, change_dir, skills_root, task=1)
+        second = self._bootstrap(project, change_dir, skills_root, task=1)
+
+        self.assertTrue(second["ok"], second)
+        self.assertEqual(second["runId"], first["runId"])
+        self.assertEqual(second["attempt"], first["attempt"])
+        self.assertTrue(second["reused"])
+        starts = [
+            e for e in self._events(change_dir)
+            if e.get("phase") == "execute" and e.get("type") == "phase.start"
+        ]
+        self.assertEqual(len(starts), 1)
+
+    def test_missing_publication_evidence_fails_closed_with_recovery(self) -> None:
+        """无 committed 发布 journal：HANDOFF_REQUIRED 原样暴露，不绕过交接校验。"""
+        project, change_dir, skills_root = self._make_project()
+        # 撤掉发布证据——plan 没有完成的机器证据
+        for journal in (change_dir / "meta" / "publication-journals").glob("*.json"):
+            journal.unlink()
+
+        result = self._bootstrap(project, change_dir, skills_root, task=1)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["code"], "BOOTSTRAP_EXECUTE_PREPARE_FAILED")
+        self.assertEqual(result["error"]["code"], "HANDOFF_REQUIRED")
+        # recoveryAction 指回原三连命令路径（排障出口保留）
+        recovery = str(result.get("recoveryAction") or "")
+        self.assertIn("harness_context.py prepare", recovery)
+        self.assertIn("harness_gate.py begin", recovery)
+        # 失败不得留下半成品 execute phase.start
+        starts = [
+            e for e in self._events(change_dir)
+            if e.get("phase") == "execute" and e.get("type") == "phase.start"
+        ]
+        self.assertEqual(len(starts), 0)
+
+    def test_gate_stage_failure_surfaces_inner_error_code(self) -> None:
+        """gate begin 失败（foundation-gate pending 且未带 --task）：错误码透传。
+
+        emit_error 的 JSON 走 stderr——复合命令必须双捕获才能还原真实错误码，
+        而不是笼统的 BOOTSTRAP_GATE_BEGIN_FAILED。
+        """
+        project, change_dir, skills_root = self._make_project()
+
+        result = self._bootstrap(project, change_dir, skills_root)  # 不带 task
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["code"], "BOOTSTRAP_EXECUTE_GATE_BEGIN_FAILED")
+        self.assertEqual(result["stage"], "gate-begin")
+        self.assertEqual(result["error"]["code"], "TASK_NUMBER_REQUIRED")
+        self.assertTrue(result.get("recoveryAction"))
+
+    def test_missing_change_dir_fails_without_creating_it(self) -> None:
+        """execute 引导不创建 change（那是 bootstrap-plan 的职责）。"""
+        project, _change_dir, skills_root = self._make_project()
+
+        result = CONTEXT.bootstrap_execute(
+            project,
+            change="nonexistent-change",
+            executor="codebuddy",
+            skills_root=str(skills_root),
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["code"], "CHANGE_NOT_FOUND")
+        self.assertFalse((project / ".harness" / "changes" / "nonexistent-change").exists())
+
+    def test_uninitialized_project_reports_init_hint(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="harness-bootstrap-exec-"))
+        project = tmp / "proj"
+        project.mkdir()
+        init_repo(project)
+
+        result = CONTEXT.bootstrap_execute(
+            project, change="demo-change", executor="codebuddy"
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["code"], "PROJECT_ROOT_INVALID")
+        self.assertIn("hunter-harness init", result["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
