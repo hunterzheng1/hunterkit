@@ -1123,6 +1123,70 @@ def _write_exec_runtime_receipt(
     os.replace(temporary, path)
 
 
+# 结果收据的 outputTail 截断上限（字节）。完整输出仍在 runner 的
+# 64 KiB output_tail 里；收据摘要只作 ledger evidence 展示，不承担
+# 完整日志职责（设计文档 batch2 §8：截断丢关键证据的风险由 runner
+# 日志兜底）。
+RESULT_RECEIPT_TAIL_BYTES = 4096
+
+
+def _utf8_safe_tail(text: str, max_bytes: int) -> str:
+    """按字节截断且不撕裂 UTF-8 多字节序列。"""
+
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    truncated = encoded[:max_bytes]
+    # 回退到 UTF-8 序列边界：被截断的多字节前缀以 0b10xxxxxx 开头。
+    while truncated and (truncated[-1] & 0xC0) == 0x80:
+        truncated = truncated[:-1]
+    # 整个窗口都是续字节（理论上不可能）时丢弃，避免输出半个字符。
+    if truncated and (truncated[-1] & 0xC0) == 0xC0:
+        truncated = truncated[:-1]
+    return truncated.decode("utf-8", errors="replace")
+
+
+def _write_exec_result_receipt(
+    path: Path,
+    *,
+    command: Sequence[str],
+    profile: str,
+    result: CommandResult,
+) -> None:
+    """exec 结果收据（批次 2 WI-1a：证据直接采集）。
+
+    与 runtime receipt（进程管理用途：argvHash/PowerShell 语义）并存、
+    用途不同不合并。本收据供 ``harness_ledger.py record-from-receipt``
+    消费：command/exitCode/durationMs/outputTail 直接来自真实执行，
+    模型不再手工转录 8 字段。timeout 也是验证证据（timedOut=true），
+    与 runtime receipt 在 timeout 时不写的行为有意不同。
+    """
+
+    payload = {
+        "schemaVersion": 1,
+        "action": "exec-result",
+        "completedAtEpochSeconds": int(time.time()),
+        "argv": [str(item) for item in command],
+        "profile": str(profile),
+        "exitCode": result.returncode,
+        "timedOut": result.timed_out,
+        "durationMs": int(result.duration_seconds * 1000),
+        "outputTail": _utf8_safe_tail(result.output_tail, RESULT_RECEIPT_TAIL_BYTES),
+        "outputTailTruncated": len(
+            result.output_tail.encode("utf-8")
+        ) > RESULT_RECEIPT_TAIL_BYTES,
+        "processTreeIsolated": result.process_tree_isolated,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    os.replace(temporary, path)
+
+
 def _print_plan(profile: str, plan: Sequence[TestModule]) -> None:
     payload = {
         "profile": profile,
@@ -1386,6 +1450,7 @@ def _run_exec(args: argparse.Namespace) -> int:
                 cwd=project,
                 timeout_seconds=args.timeout_seconds,
                 environ=environment,
+                capture_output=bool(args.result_receipt),
                 allow_detached_processes=args.allow_detached_processes,
             )
             run_lock.heartbeat()
@@ -1421,6 +1486,19 @@ def _run_exec(args: argparse.Namespace) -> int:
     if not result.process_tree_isolated:
         print("PROCESS_TREE_ISOLATION_UNAVAILABLE", file=sys.stderr)
         return 4
+    # 结果收据在命令真实执行完毕后写入（含 timeout——失败也是验证证据，
+    # 供 record-from-receipt 消费）。启动失败（126/127）与隔离失败（4）
+    # 提前返回，不写：没有完整执行语义可记。
+    if args.result_receipt:
+        result_receipt_path = Path(args.result_receipt)
+        if not result_receipt_path.is_absolute():
+            result_receipt_path = project / result_receipt_path
+        _write_exec_result_receipt(
+            result_receipt_path,
+            command=command,
+            profile=args.profile,
+            result=result,
+        )
     if result.timed_out:
         print(
             f"TEST_COMMAND_TIMEOUT: timeoutSeconds={args.timeout_seconds}",
@@ -1535,6 +1613,13 @@ def build_parser() -> argparse.ArgumentParser:
     exec_parser.add_argument(
         "--runtime-receipt",
         help="Write a secret-free argv hash and PowerShell runtime receipt.",
+    )
+    exec_parser.add_argument(
+        "--result-receipt",
+        help=(
+            "Write an exec result receipt (argv/exitCode/durationMs/outputTail) "
+            "for harness_ledger.py record-from-receipt."
+        ),
     )
     exec_parser.add_argument(
         "--environment-receipt",
