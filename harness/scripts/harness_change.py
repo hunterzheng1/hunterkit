@@ -1573,6 +1573,18 @@ def cmd_ensure_identity(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     project = resolve_main_project_root()
+    change_id = str(getattr(args, "change", None) or "").strip()
+    if change_id:
+        payload = change_recovery_view(project, change_id)
+        if payload.get("ok"):
+            emit(payload, as_json=bool(args.json))
+            return 0
+        return emit_error(
+            str(payload.get("code", "STATUS_FAILED")),
+            str(payload.get("message", "status failed")),
+            as_json=bool(args.json),
+            extra={k: v for k, v in payload.items() if k not in {"ok", "message"}},
+        )
     items = classify_changes(project)
     payload = {
         "ok": True,
@@ -1592,6 +1604,489 @@ def cmd_status(args: argparse.Namespace) -> int:
     }
     emit(payload, as_json=bool(args.json))
     return 0
+
+
+# ---------------------------------------------------------------------------
+# status --change <cn>：统一只读恢复视图（批次 2 WI-3）
+#
+# 故障路径此前要法证式读 gate-policy/events/ledger/state-snapshot 双层目录
+# 才能拼出「现在在哪、下一步做什么」。本视图只读派生单一权威状态，不新建
+# 任何可写状态（提案边界：不保留两套可写权威状态）。
+# ---------------------------------------------------------------------------
+
+def _status_read_json(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        data = _read_json(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _status_read_events(change_dir: Path) -> list[dict[str, Any]]:
+    """读事件（state 目录权威位置 + 契约目录 legacy 位置，去重保序）。"""
+    import harness_events as he
+
+    events_file = he.events_path(change_dir)
+    events = list(he.load_events(events_file))
+    legacy = change_dir / "events.ndjson"
+    if legacy.is_file() and legacy.resolve() != events_file.resolve():
+        seen = {id(e) for e in events}
+        for item in he.load_events(legacy):
+            if not any(
+                item.get("id") == e.get("id") and item.get("id") for e in events
+            ):
+                events.append(item)
+        del seen
+    return events
+
+
+def _status_open_phase(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """最近的未关门 phase.start（run_id 无对应 phase.end / phase.auto_sealed）。
+
+    覆盖 task 阶段（轻任务）与 plan/execute/…（完整流程）——两者都是
+    phase.start/phase.end 生命周期，只是阶段名不同。
+    """
+    started: list[dict[str, Any]] = []
+    closed: set[str] = set()
+    for event in events:
+        if event.get("type") == "phase.start":
+            started.append(event)
+        elif event.get("type") in {"phase.end", "phase.auto_sealed"}:
+            run_id = str(event.get("run_id") or "")
+            if run_id:
+                closed.add(run_id)
+    for event in reversed(started):
+        run_id = str(event.get("run_id") or "")
+        if run_id and run_id in closed:
+            continue
+        return event
+    return None
+
+
+def _status_read_transitions(state_dir: Path) -> list[dict[str, Any]]:
+    """读 context 转换收据（runtime/transitions.ndjson，只读）。
+
+    v2 plan finalize 只写发布 journal + 转换收据、不写 phase.end 事件
+    （harness_context._ensure_phase_end_event 文档化的结构性缺口），
+    因此「阶段已关门」的证据 = phase.end 事件 ∪ fromPhase 收据。
+    """
+    transitions_file = state_dir / "runtime" / "transitions.ndjson"
+    if not transitions_file.is_file():
+        return []
+    receipts: list[dict[str, Any]] = []
+    try:
+        text = transitions_file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            receipts.append(item)
+    return receipts
+
+
+def _status_phase_progress(
+    events: list[dict[str, Any]],
+    planned: list[str] | None,
+    transitions: list[dict[str, Any]] | None = None,
+    committed_journal: Path | None = None,
+    current: str | None = None,
+) -> dict[str, Any] | None:
+    """plannedPhases 进度：已完成 / 当前 / 待办。
+
+    完成证据取并集：phase.end 事件（gate close 或自动配对）、转换收据
+    fromPhase（v2 plan finalize 路径只写收据）、committed 发布 journal
+    （finalize 已提交但交接未补录的 T6 中断窗口）。current 由调用方传入
+    权威阶段（_status_phase_identity 的推导），不从 open start 自行推导
+    ——v2 plan start 永远 open，会压过收据/journal 的完成事实。
+    """
+    if not planned:
+        return None
+    ended: set[str] = set()
+    for event in events:
+        if event.get("type") != "phase.end":
+            continue
+        phase = harness_paths.resolve_phase_name(event.get("phase"))
+        if phase:
+            ended.add(phase)
+    for receipt in transitions or []:
+        phase = harness_paths.resolve_phase_name(receipt.get("fromPhase"))
+        if phase:
+            ended.add(phase)
+    if committed_journal is not None:
+        ended.add("plan")
+    completed = [p for p in planned if p in ended and p != current]
+    pending = [p for p in planned if p not in ended and p != current]
+    return {
+        "plannedPhases": list(planned),
+        "completed": completed,
+        "current": current,
+        "pending": pending,
+    }
+
+
+def _status_ledger_verifications(change_dir: Path) -> dict[str, Any] | None:
+    """各 verification kind 的最新记录与 status（ledger 只读）。"""
+    import harness_ledger as hl
+
+    try:
+        ledger, path = hl.load_ledger(change_dir)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if ledger is None:
+        return None
+    validations = ledger.get("validations")
+    if not isinstance(validations, dict):
+        return {"ledgerPath": str(path) if path else None, "verifications": {}}
+    verifications: dict[str, Any] = {}
+    for key, value in validations.items():
+        if not isinstance(value, dict):
+            continue
+        # v3 结构：kind -> {attempts: [{status,...}]}；取最新 attempt
+        attempts = value.get("attempts")
+        if isinstance(attempts, list) and attempts:
+            latest = attempts[-1]
+            if isinstance(latest, dict):
+                verifications[str(key)] = {
+                    "status": latest.get("status"),
+                    "recordedAt": latest.get("recordedAt")
+                    or latest.get("timestamp"),
+                }
+                continue
+        # legacy 结构：kind -> {status,...} 直接平铺
+        if value.get("status") is not None:
+            verifications[str(key)] = {
+                "status": value.get("status"),
+                "recordedAt": value.get("recordedAt") or value.get("timestamp"),
+            }
+    return {
+        "ledgerPath": str(path) if path else None,
+        "verifications": verifications,
+    }
+
+
+def _status_dirty_tree(project: Path) -> list[str]:
+    """git status --porcelain 路径（重命名拆两侧，排除 .harness/**）。"""
+    proc = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    paths: list[str] = []
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        raw = line[3:].strip().strip('"')
+        if " -> " in raw:
+            old, new = raw.split(" -> ", 1)
+            paths.extend((old.strip().strip('"'), new.strip().strip('"')))
+        else:
+            paths.append(raw)
+    return [
+        p.replace("\\", "/") for p in paths if not p.replace("\\", "/").startswith(".harness/")
+    ]
+
+
+def _status_committed_journal(change_dir: Path) -> Path | None:
+    """已 committed 的 v2 发布 journal——plan 完成的机器证据（只读）。
+
+    与 harness_context._committed_publication_journal 同一判据；不 import
+    是为了避免 harness_change ↔ harness_context 的模块级循环依赖
+    （harness_context 顶部已 import harness_ledger，且在函数内延迟
+    import harness_change）。
+    """
+    journal_dir = change_dir / "meta" / "publication-journals"
+    if not journal_dir.is_dir():
+        return None
+    for path in sorted(journal_dir.glob("*.json")):
+        payload = _status_read_json(path)
+        if payload is not None and payload.get("state") == "committed":
+            return path
+    return None
+
+
+def _status_phase_identity(
+    *,
+    events: list[dict[str, Any]],
+    transitions: list[dict[str, Any]],
+    committed_journal: Path | None,
+    planned: list[str] | None,
+    entry: str,
+) -> dict[str, Any]:
+    """推导当前阶段身份（phase/runId/attempt/handoffPending）。
+
+    权威顺序与 context_view/gate close 的写入顺序一致：
+    1. 有转换收据 → 最新收据 toPhase 即当前阶段（v2 plan finalize 不写
+       plan 的 phase.end，plan start 永远 open，不能压过收据）；
+    2. 无收据但最新 phase.end 已写 → gate close 中断窗口（phase.end 先于
+       handoff 落盘）：阶段仍按 end 的阶段，handoffPending=true；
+    3. committed 发布 journal（plan 完成的机器证据）→ T6 式中断窗口：
+       下一阶段按 plannedPhases 推导，等 bootstrap-execute/gate begin；
+    4. 否则最近未关门 phase.start → 该阶段进行中。
+    """
+    phase = None
+    run_id = None
+    attempt = None
+    handoff_pending = False
+
+    open_phase = _status_open_phase(events)
+    open_name = (
+        harness_paths.resolve_phase_name(open_phase.get("phase")) if open_phase else None
+    )
+
+    if transitions:
+        phase = harness_paths.resolve_phase_name(transitions[-1].get("toPhase"))
+        if open_phase is not None and open_name != phase:
+            # 收据推进后的旧 start（典型：v2 plan）不再提供 run 身份
+            run_id = None
+            attempt = None
+        elif open_phase is not None:
+            run_id = str(open_phase.get("run_id") or "") or None
+            raw_attempt = open_phase.get("attempt")
+            attempt = (
+                raw_attempt if isinstance(raw_attempt, int) and raw_attempt > 0 else None
+            )
+        return {
+            "phase": phase,
+            "runId": run_id,
+            "attempt": attempt,
+            "handoffPending": handoff_pending,
+        }
+
+    # 无收据：找最新 phase.end（gate close 先写 end 后写收据）
+    latest_end = None
+    for event in events:
+        if event.get("type") == "phase.end":
+            latest_end = event
+    if latest_end is not None:
+        phase = harness_paths.resolve_phase_name(latest_end.get("phase"))
+        handoff_pending = True
+        return {
+            "phase": phase,
+            "runId": None,
+            "attempt": None,
+            "handoffPending": handoff_pending,
+        }
+
+    if committed_journal is not None and entry == "full-flow":
+        # plan finalize 已 committed、交接未补录：下一阶段等 begin
+        after_plan = None
+        if isinstance(planned, list):
+            for index, name in enumerate(planned):
+                if (
+                    harness_paths.resolve_phase_name(name) == "plan"
+                    and index + 1 < len(planned)
+                ):
+                    after_plan = harness_paths.resolve_phase_name(planned[index + 1])
+                    break
+        return {
+            "phase": after_plan,
+            "runId": None,
+            "attempt": None,
+            "handoffPending": False,
+        }
+
+    if open_phase is not None:
+        phase = open_name or str(open_phase.get("phase"))
+        run_id = str(open_phase.get("run_id") or "") or None
+        raw_attempt = open_phase.get("attempt")
+        attempt = (
+            raw_attempt if isinstance(raw_attempt, int) and raw_attempt > 0 else None
+        )
+    return {"phase": phase, "runId": run_id, "attempt": attempt, "handoffPending": False}
+
+
+def _status_next_action(
+    *,
+    entry: str,
+    task: dict[str, Any] | None,
+    identity: dict[str, Any],
+    progress: dict[str, Any] | None,
+    transitions: list[dict[str, Any]] | None = None,
+) -> str:
+    """按状态机推导下一步动作，复用各命令既有文案，不新造话术。"""
+    phase = identity.get("phase")
+    if entry == "light-task":
+        status = str((task or {}).get("status") or "open")
+        if status != "open":
+            return "任务已终态；归档目录见 archiveDir 或 .harness/archive/"
+        change = str((task or {}).get("changeId") or "")
+        return (
+            "继续编辑/测试，然后 harness_task.py finish --project . "
+            f"--change {change} --json"
+        )
+    # 完整流程
+    if identity.get("handoffPending"):
+        # gate close 中断窗口：phase.end 已写、交接收据未落盘——
+        # 复用 gate 既有 recoveryAction 语义（幂等续跑，不需重取租约）
+        return (
+            "本地关门已完成（phase.end 已写），交接未落盘：用原 close 命令"
+            "补 --to-phase 重跑即幂等续跑（harness_gate.py close --phase "
+            f"{phase} --change <cn> --status <OK|WARN> --to-phase <后继> --json）"
+        )
+    if phase is None:
+        return (
+            "无进行中阶段：新变更从 bootstrap-plan 开始"
+            "（harness_context.py bootstrap-plan --project . --change <cn> "
+            "--executor <tool> --json）"
+        )
+    if phase == "plan":
+        return (
+            "完成计划产物后运行 plan finalize（发布 journal committed 后 "
+            "bootstrap-execute 会自动补录交接凭证）"
+        )
+    if phase == "execute":
+        if identity.get("runId") is None:
+            return (
+                "阶段 execute 已交接但未开始：运行 "
+                "harness_context.py bootstrap-execute --project . "
+                "--change <cn> --executor <tool> --json"
+            )
+        return (
+            "TDD 编码与验证；完成后运行 "
+            f"harness_gate.py close --phase execute --status <OK|WARN> --json"
+        )
+    if phase == "review":
+        return "完成评审产出后运行 harness_gate.py close --phase review --json"
+    if phase == "submit":
+        return "完成提交准备后运行 harness_gate.py close --phase submit --json"
+    if identity.get("runId") is None and transitions:
+        return f"阶段 {phase} 已交接但未开始：运行 gate begin 进入该阶段"
+    pending = (progress or {}).get("pending") or []
+    if pending:
+        return f"进入下一阶段 {pending[0]}（bootstrap-execute 或 gate begin）"
+    return "全部计划阶段已完成；归档入口 harness_archive.py archive --json"
+
+
+def change_recovery_view(project_root: Path, change_id: str) -> dict[str, Any]:
+    """单 change 统一只读恢复视图：轻任务与完整流程同一 resolver。"""
+    resolved = resolve_change(project_root, change_id)
+    if not resolved.get("ok"):
+        return resolved
+    change_dir = Path(resolved["changeDir"])
+    state_dir = harness_paths.resolve_state_dir_for_contract(change_dir)
+
+    # 入口代际：task.json 存在 = 轻任务；否则完整流程
+    task = _status_read_json(change_dir / "meta" / "task.json")
+    entry = "light-task" if task is not None else "full-flow"
+
+    events = _status_read_events(change_dir)
+    transitions = _status_read_transitions(state_dir)
+
+    # 档位及来源：轻任务区分声明 floor 与 finish 裁决；完整流程读 gate-policy
+    tier: str | None = None
+    tier_source: str | None = None
+    declared_tier: str | None = None
+    if entry == "light-task":
+        declared_tier = task.get("declaredTier") if isinstance(task, dict) else None
+        tier = task.get("tier") if isinstance(task, dict) else None
+        tier_source = (
+            "finish-adjudicated" if tier else None
+        )
+    else:
+        policy_loaded = harness_paths.load_change_gate_policy(change_dir)
+        policy = policy_loaded.get("policy") if isinstance(policy_loaded, dict) else None
+        if isinstance(policy, dict):
+            tier = policy.get("tier")
+            tier_source = str(policy_loaded.get("source") or "gate-policy-json")
+
+    # plannedPhases（完整流程；轻任务无阶段计划）
+    committed_journal = _status_committed_journal(change_dir)
+    planned = None
+    if entry == "full-flow":
+        policy_loaded = harness_paths.load_change_gate_policy(change_dir)
+        policy = policy_loaded.get("policy") if isinstance(policy_loaded, dict) else None
+        planned = policy.get("plannedPhases") if isinstance(policy, dict) else None
+        if not planned and isinstance(policy, dict):
+            planned = policy.get("defaultPhases")
+
+    identity = _status_phase_identity(
+        events=events,
+        transitions=transitions,
+        committed_journal=committed_journal,
+        planned=planned,
+        entry=entry,
+    )
+
+    progress = None
+    if entry == "full-flow":
+        progress = _status_phase_progress(
+            events,
+            planned,
+            transitions,
+            committed_journal,
+            current=identity.get("phase"),
+        )
+
+    ledger_view = _status_ledger_verifications(change_dir)
+    dirty = _status_dirty_tree(project_root)
+
+    # 外来脏路径：仅轻任务有 begin 基线可比（full-flow 的 foreign 判定在
+    # classify/archive 侧，视图不重复推导，避免第二套语义）
+    foreign_paths: list[str] = []
+    if entry == "light-task" and isinstance(task, dict):
+        baseline = task.get("dirtyBaseline")
+        if isinstance(baseline, dict):
+            import harness_task as ht
+
+            foreign_paths = ht.detect_foreign_dirt(project_root, baseline)
+
+    lease_state = inspect_lease_state(project_root, change_id)
+
+    next_action = _status_next_action(
+        entry=entry,
+        task=task,
+        identity=identity,
+        progress=progress,
+        transitions=transitions,
+    )
+
+    return {
+        "ok": True,
+        "code": "CHANGE_RECOVERY_VIEW",
+        "changeId": resolved["changeId"],
+        "changeDir": str(change_dir),
+        "stateDir": str(state_dir),
+        "entryGeneration": entry,
+        "currentPhase": identity.get("phase"),
+        "runId": identity.get("runId"),
+        "attempt": identity.get("attempt"),
+        "handoffPending": identity.get("handoffPending"),
+        "tier": tier,
+        "tierSource": tier_source,
+        "declaredTier": declared_tier,
+        "phaseProgress": progress,
+        "verifications": (ledger_view or {}).get("verifications"),
+        "ledgerPath": (ledger_view or {}).get("ledgerPath"),
+        "uncommittedPaths": dirty,
+        "foreignPaths": foreign_paths,
+        "lease": {
+            "state": lease_state.get("state"),
+            "phase": (lease_state.get("lease") or {}).get("phase")
+            if isinstance(lease_state.get("lease"), dict)
+            else None,
+            "runId": (lease_state.get("lease") or {}).get("runId")
+            if isinstance(lease_state.get("lease"), dict)
+            else None,
+            "expiresAt": (lease_state.get("lease") or {}).get("expiresAt")
+            if isinstance(lease_state.get("lease"), dict)
+            else None,
+        },
+        "taskStatus": (task or {}).get("status") if isinstance(task, dict) else None,
+        "nextAction": next_action,
+    }
 
 
 def cmd_cleanup_changes(args: argparse.Namespace) -> int:
@@ -1614,6 +2109,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", parents=[shared])
     p_status.add_argument("--all", action="store_true", dest="show_all")
+    p_status.add_argument(
+        "--change",
+        default=None,
+        help="单 change 只读恢复视图（轻任务/完整流程统一）；缺省列出全部 change 分类",
+    )
     p_status.set_defaults(func=cmd_status)
 
     p_cleanup = sub.add_parser("cleanup", parents=[shared])
