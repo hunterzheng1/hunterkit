@@ -807,6 +807,224 @@ class RunnerContractTests(unittest.TestCase):
             managed.assert_not_called()
 
 
+@unittest.skipIf(runner is None, "resource-safe runner is not implemented yet")
+class ExecResultReceiptTests(unittest.TestCase):
+    """批次 2 WI-1a：exec 结果收据（--result-receipt）。"""
+
+    @staticmethod
+    def _result(
+        *,
+        returncode: int = 0,
+        timed_out: bool = False,
+        duration_seconds: float = 0.25,
+        output_tail: str = "Tests run: 3, Failures: 0\n",
+    ) -> "runner.CommandResult":
+        return runner.CommandResult(
+            returncode=returncode,
+            timed_out=timed_out,
+            duration_seconds=duration_seconds,
+            process_tree_isolated=True,
+            output_tail=output_tail,
+        )
+
+    def test_success_writes_receipt_with_full_fields(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            receipt_path = Path(raw_tmp) / "receipts" / "unitTest.json"
+            with mock.patch.object(
+                runner,
+                "run_managed_command",
+                return_value=self._result(),
+            ) as managed:
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        raw_tmp,
+                        "--result-receipt",
+                        str(receipt_path),
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "print('ok')",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            # --result-receipt 隐式开启输出捕获（无收据时保持默认不捕获）
+            self.assertTrue(managed.call_args.kwargs["capture_output"])
+            payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["schemaVersion"], 1)
+            self.assertEqual(payload["action"], "exec-result")
+            self.assertEqual(payload["argv"], [sys.executable, "-c", "print('ok')"])
+            self.assertEqual(payload["profile"], "safe")
+            self.assertEqual(payload["exitCode"], 0)
+            self.assertFalse(payload["timedOut"])
+            self.assertEqual(payload["durationMs"], 250)
+            self.assertEqual(payload["outputTail"], "Tests run: 3, Failures: 0\n")
+            self.assertFalse(payload["outputTailTruncated"])
+            self.assertTrue(payload["processTreeIsolated"])
+            # 原子写：无 .tmp 残留
+            leftovers = [
+                item.name
+                for item in receipt_path.parent.iterdir()
+                if item.name.startswith(".") and item.name.endswith(".tmp")
+            ]
+            self.assertEqual(leftovers, [])
+
+    def test_timeout_still_writes_receipt(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            receipt_path = Path(raw_tmp) / "timeout.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(
+                    runner,
+                    "run_managed_command",
+                    return_value=self._result(
+                        returncode=124, timed_out=True, duration_seconds=30.0
+                    ),
+                ),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        raw_tmp,
+                        "--timeout-seconds",
+                        "30",
+                        "--result-receipt",
+                        str(receipt_path),
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "import time; time.sleep(60)",
+                    ]
+                )
+            self.assertEqual(code, 124)
+            self.assertIn("TEST_COMMAND_TIMEOUT", stderr.getvalue())
+            payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["timedOut"])
+            self.assertEqual(payload["exitCode"], 124)
+            self.assertEqual(payload["durationMs"], 30000)
+
+    def test_output_tail_is_truncated_to_budget_utf8_safe(self) -> None:
+        # 5000 个中文（15000 UTF-8 字节）→ 截到 ≤4096 且不撕裂多字节序列
+        long_tail = "环境" * 2500
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            receipt_path = Path(raw_tmp) / "truncated.json"
+            with mock.patch.object(
+                runner,
+                "run_managed_command",
+                return_value=self._result(output_tail=long_tail),
+            ):
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        raw_tmp,
+                        "--result-receipt",
+                        str(receipt_path),
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "print('long')",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["outputTailTruncated"])
+            encoded = payload["outputTail"].encode("utf-8")
+            self.assertLessEqual(len(encoded), runner.RESULT_RECEIPT_TAIL_BYTES)
+            # 截断点落在字符边界：4096 = 1365×3 + 1，回退到 4095 字节
+            # = 1365 个完整三字节字符，尾字符「环」未被撕裂
+            self.assertEqual(len(encoded), 4095)
+            self.assertEqual(len(encoded) % 3, 0)
+            self.assertTrue(payload["outputTail"].endswith("环"))
+
+    def test_without_result_receipt_behavior_is_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            with mock.patch.object(
+                runner,
+                "run_managed_command",
+                return_value=self._result(),
+            ) as managed:
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        raw_tmp,
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "print('ok')",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            # 无收据时不捕获输出（既有行为保持）
+            self.assertFalse(managed.call_args.kwargs["capture_output"])
+            # 项目目录里没有产生任何收据文件
+            produced = [
+                item.name
+                for item in Path(raw_tmp).rglob("*")
+                if item.is_file() and "receipt" in item.name
+            ]
+            self.assertEqual(produced, [])
+
+    def test_relative_receipt_path_resolves_against_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            project = Path(raw_tmp)
+            with mock.patch.object(
+                runner,
+                "run_managed_command",
+                return_value=self._result(),
+            ):
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        str(project),
+                        "--result-receipt",
+                        "evidence/receipts/unitTest.json",
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "print('ok')",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            resolved = project / "evidence" / "receipts" / "unitTest.json"
+            self.assertTrue(resolved.is_file())
+            payload = json.loads(resolved.read_text(encoding="utf-8"))
+            self.assertEqual(payload["action"], "exec-result")
+
+    def test_persistent_service_refusal_writes_no_receipt(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="harness-runner-result-") as raw_tmp:
+            receipt_path = Path(raw_tmp) / "must-not-exist.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(runner, "run_managed_command") as managed,
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = runner.main(
+                    [
+                        "exec",
+                        "--project",
+                        raw_tmp,
+                        "--result-receipt",
+                        str(receipt_path),
+                        "--",
+                        sys.executable,
+                        "harness/scripts/harness_service.py",
+                        "ensure",
+                        "--project",
+                        raw_tmp,
+                    ]
+                )
+            self.assertEqual(code, 7)
+            self.assertIn("PERSISTENT_SERVICE_MODE_REQUIRED", stderr.getvalue())
+            managed.assert_not_called()
+            self.assertFalse(receipt_path.exists())
+
+
 class WorkflowContractTests(unittest.TestCase):
     def test_policy_uses_safe_profile_by_default(self) -> None:
         policy = json.loads(
