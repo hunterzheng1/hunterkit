@@ -5,6 +5,7 @@ Subcommands:
   hash       — compute order-independent inputsHash for a file set
   can-reuse  — decide reuse / rerun / insufficient-evidence
   record     — write validation result + inputsHash/inputsFiles into ledger
+  render-report — derive the test report from ledger+events (batch 2 WI-4a)
 
 Python 3.10+, stdlib only. UTF-8 without BOM. Windows path safe.
 """
@@ -3565,6 +3566,538 @@ def cmd_scenario_receipt_template(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- 批次 2 WI-4a：render-report（测试报告派生，消不对称 E） ---
+
+REPORT_RENDER_VERSION = "harness-render-report-1"
+# 五态状态沿用归档 summary-data 语义（设计 §8），不新造枚举：
+# OK/FAIL/NOT_RUN 来自 ledger 条目 status；REUSED 表示复用标记；
+# RETESTED 表示同 target 多 attempt（rerunCount>0）。
+_FIVE_STATE_REUSED_MARKERS = ("REUSED",)
+
+
+def _render_report_changed_files(
+    project: Path | None,
+    base: str | None,
+    head: str | None,
+) -> list[dict[str, Any]]:
+    """变更文件表：git diff --numstat base..head（与归档同口径）。"""
+    if project is None or not base or not head or base == head:
+        return []
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{base}..{head}"],
+        cwd=str(project),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return []
+    changed: list[dict[str, Any]] = []
+    for line in proc.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        ins = int(parts[0]) if parts[0].isdigit() else 0
+        dele = int(parts[1]) if parts[1].isdigit() else 0
+        changed.append(
+            {"path": parts[2], "insertions": ins, "deletions": dele}
+        )
+    return changed
+
+
+def _render_report_five_state(entry: dict[str, Any]) -> str:
+    """单条 ledger 条目 → 五态状态（OK/FAIL/NOT_RUN/REUSED/RETESTED）。
+
+    语义沿用归档 summary-data：REUSED 看 reused 标记或 status 含
+    REUSED；RETESTED 看 attempts 历史（>1 次终态记录即重测过）；
+    其余按 status 原样（OK/FAIL/NOT_RUN）。无法判定时保留原始
+    status 字符串，不猜（设计 §8：视图字段缺失时报 UNKNOWN 不猜）。
+    """
+    status = str(entry.get("status") or "").strip().upper()
+    reused_flag = str(entry.get("reused") or "").strip().lower()
+    if reused_flag in {"true", "1"} or any(
+        marker in status for marker in _FIVE_STATE_REUSED_MARKERS
+    ):
+        return "REUSED"
+    attempts = entry.get("attempts")
+    if isinstance(attempts, list):
+        terminal = [
+            item
+            for item in attempts
+            if isinstance(item, dict)
+            and str(item.get("status") or "").strip().upper()
+            in {"OK", "FAIL", "NOT_RUN"}
+        ]
+        if len(terminal) > 1:
+            return "RETESTED"
+    history = entry.get("history")
+    if isinstance(history, list) and len(history) > 1:
+        return "RETESTED"
+    if status in {"OK", "FAIL", "NOT_RUN"}:
+        return status
+    return status or "UNKNOWN"
+
+
+def _render_report_metrics_line(entry: dict[str, Any]) -> str:
+    """metrics dict → 单行摘要（total/passed/failed 或 run/failures）。"""
+    metrics = entry.get("metrics")
+    if not isinstance(metrics, dict):
+        return ""
+    parts: list[str] = []
+    for key in (
+        "total",
+        "run",
+        "testsRun",
+        "passed",
+        "failed",
+        "failures",
+        "errors",
+        "skipped",
+        "blocked",
+        "deselected",
+    ):
+        if key in metrics:
+            parts.append(f"{key}={metrics[key]}")
+    return " ".join(parts)
+
+
+def _render_report_evidence_excerpt(entry: dict[str, Any]) -> str:
+    """evidence 字段 → 最多 4 行摘录（与 record-from-receipt 同上限）。"""
+    evidence = entry.get("evidence")
+    if not isinstance(evidence, str) or not evidence.strip():
+        return ""
+    lines = [line.strip() for line in evidence.splitlines() if line.strip()]
+    return "\n".join(lines[-4:])
+
+
+def _render_report_scenario_summary(change_dir: Path) -> dict[str, Any] | None:
+    """场景覆盖摘要：复用 gate 的 _validate_scenario_coverage（只读）。
+
+    harness_gate 顶部 import harness_ledger，此处必须延迟导入避免环。
+    """
+    try:
+        import harness_gate as hgate
+    except ImportError:
+        return None
+    try:
+        return hgate._validate_scenario_coverage(change_dir)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _render_report_markdown(
+    *,
+    change_dir: Path,
+    change_name: str,
+    rendered_at: str,
+    ledger: dict[str, Any] | None,
+    events_summary: dict[str, Any] | None,
+    changed_files: list[dict[str, Any]],
+    base_commit: str | None,
+    head_commit: str | None,
+    scenario_summary: dict[str, Any] | None,
+) -> str:
+    lines: list[str] = []
+    # frontmatter：生成标记（设计 §5：渲染报告与手写报告不并存于同一
+    # change；归档按 generated 标记区分事实来源）。
+    lines.extend(
+        [
+            "---",
+            "generated: true",
+            f"generator: {REPORT_RENDER_VERSION}",
+            f"change-name: {change_name}",
+            f"rendered-at: {rendered_at}",
+            "source: ledger+events",
+            "---",
+            "",
+            f"# 测试报告 — {change_name}",
+            "",
+            "> 本报告由 harness_ledger.py render-report 从 ledger 与 events 派生，",
+            "> 可随时重建，不作为第二份可写状态（提案 §4.9）。",
+            "> 模型只在文末「解读」段落追加残余风险与下一步。",
+            "",
+        ]
+    )
+
+    # --- 变更文件表 ---
+    lines.extend(["## 变更文件", ""])
+    if base_commit and head_commit:
+        lines.append(f"范围: `{base_commit[:12]}..{head_commit[:12]}`")
+        lines.append("")
+    if changed_files:
+        lines.extend(["| 路径 | + | - |", "|---|---:|---:|"])
+        for item in changed_files:
+            lines.append(
+                f"| {item.get('path') or ''} | "
+                f"{item.get('insertions', 0)} | {item.get('deletions', 0)} |"
+            )
+        total_ins = sum(int(i.get("insertions") or 0) for i in changed_files)
+        total_del = sum(int(i.get("deletions") or 0) for i in changed_files)
+        lines.extend(
+            [
+                "",
+                f"共 {len(changed_files)} 个文件，+{total_ins}/-{total_del}。",
+            ]
+        )
+    else:
+        lines.append("（无提交间差异或 base/head 不可得）")
+    lines.append("")
+
+    # --- 验证证据 ---
+    lines.extend(["## 验证证据", ""])
+    validations: dict[str, Any] = {}
+    if isinstance(ledger, dict):
+        raw = ledger.get("validations")
+        if isinstance(raw, dict):
+            validations = raw
+    if validations:
+        lines.extend(
+            [
+                "| 验证 | 五态 | exit | 耗时 | scope/coverage | metrics |",
+                "|---|:---:|---:|---:|---|---|",
+            ]
+        )
+        for kind in sorted(validations):
+            entry = validations.get(kind)
+            if not isinstance(entry, dict):
+                continue
+            five = _render_report_five_state(entry)
+            exit_code = entry.get("exitCode")
+            exit_text = str(exit_code) if exit_code is not None else "—"
+            duration = entry.get("durationMs")
+            duration_text = (
+                f"{int(duration) / 1000:.1f}s"
+                if isinstance(duration, int) and not isinstance(duration, bool)
+                else "—"
+            )
+            scope = str(entry.get("scope") or "—")
+            coverage = str(entry.get("coverage") or "—")
+            metrics = _render_report_metrics_line(entry) or "—"
+            lines.append(
+                f"| {kind} | {five} | {exit_text} | {duration_text} "
+                f"| {scope}/{coverage} | {metrics} |"
+            )
+        lines.append("")
+        # 每条验证的命令与证据摘录（表格放不下的事实）
+        for kind in sorted(validations):
+            entry = validations.get(kind)
+            if not isinstance(entry, dict):
+                continue
+            command = str(entry.get("command") or "").strip()
+            finished = str(entry.get("finishedAt") or "").strip()
+            excerpt = _render_report_evidence_excerpt(entry)
+            if not command and not excerpt:
+                continue
+            lines.append(f"### {kind}")
+            if command:
+                lines.append(f"- 命令: `{command}`")
+            if finished:
+                lines.append(f"- 完成时间: {finished}")
+            if excerpt:
+                lines.extend(["- 证据摘录:", ""])
+                for evidence_line in excerpt.splitlines():
+                    lines.append(f"  > {evidence_line}")
+                lines.append("")
+            else:
+                lines.append("")
+    else:
+        lines.append("（ledger 无验证记录）")
+        lines.append("")
+
+    # --- 场景覆盖摘要 ---
+    lines.extend(["## 场景覆盖摘要", ""])
+    if scenario_summary is not None and not scenario_summary.get("skipped"):
+        code = str(scenario_summary.get("code") or "")
+        lines.append(f"检查结果: `{code}`")
+        lines.append("")
+        for field, label in (
+            ("covered", "已覆盖（passed）"),
+            ("missing", "缺失（未绑定 ledger 条目）"),
+            ("unexecuted", "未执行（绑定但无 passed 收据）"),
+            ("deferred", "移交后续阶段（ownerPhase 靠后）"),
+        ):
+            values = scenario_summary.get(field)
+            if isinstance(values, list) and values:
+                lines.append(f"- {label}: {', '.join(str(v) for v in values)}")
+        detail = scenario_summary.get("executed")
+        if isinstance(detail, list) and detail:
+            lines.append(
+                f"- 已执行收据: {len(detail)} 个场景"
+            )
+        attempts = scenario_summary.get("attempts")
+        if isinstance(attempts, dict) and attempts:
+            multi = {
+                sid: vals
+                for sid, vals in attempts.items()
+                if isinstance(vals, list) and len(vals) > 1
+            }
+            if multi:
+                lines.append(
+                    "- 多次尝试: "
+                    + ", ".join(
+                        f"{sid}(attempt {','.join(str(v) for v in vals)})"
+                        for sid, vals in sorted(multi.items())
+                    )
+                )
+        lines.append("")
+    else:
+        lines.append("（无 scenario-manifest 或检查不适用）")
+        lines.append("")
+
+    # --- 五态状态总览 ---
+    lines.extend(["## 五态状态总览", ""])
+    if validations:
+        lines.extend(["| 验证 | 五态 |", "|---|:---:|"])
+        for kind in sorted(validations):
+            entry = validations.get(kind)
+            if isinstance(entry, dict):
+                lines.append(f"| {kind} | {_render_report_five_state(entry)} |")
+        lines.append("")
+    else:
+        lines.append("（无）")
+        lines.append("")
+
+    # --- 事件侧阶段摘要（补充 ledger 覆盖不到的执行事实） ---
+    if isinstance(events_summary, dict):
+        phases = events_summary.get("phases")
+        if isinstance(phases, dict) and phases:
+            lines.extend(["## 阶段执行摘要（events）", ""])
+            lines.extend(["| 阶段 | 状态 |", "|---|---|"])
+            for phase in sorted(phases):
+                info = phases.get(phase)
+                if isinstance(info, dict):
+                    lines.append(
+                        f"| {phase} | {info.get('status') or 'UNKNOWN'} |"
+                    )
+                else:
+                    lines.append(f"| {phase} | {info} |")
+            lines.append("")
+
+    # --- 模型解读占位（模型只追加，不改写派生内容） ---
+    lines.extend(
+        [
+            "## 解读（模型追加）",
+            "",
+            "<!-- 以下两段由模型在 render-report 输出后追加；派生部分勿改。 -->",
+            "",
+            "### 残余风险",
+            "",
+            "（待模型补充）",
+            "",
+            "### 下一步",
+            "",
+            "（待模型补充）",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _render_report_project_root(change_dir: Path) -> Path | None:
+    """渲染用项目根：.harness 祖先；声明执行 worktree 时优先 worktree。
+
+    与归档 find_project_root 同法（.harness/changes/<name> → 项目根），
+    但产品文件可能在链接 worktree——infer_execution_project_root 只认
+    可信 worktree 元数据，无声明时回退主检出。
+    """
+    resolved = change_dir.resolve()
+    project_root = next(
+        (ancestor.parent for ancestor in resolved.parents if ancestor.name == ".harness"),
+        None,
+    )
+    if project_root is None:
+        return None
+    execution_root = infer_execution_project_root(change_dir)
+    if execution_root is not None:
+        return execution_root
+    return project_root
+
+
+def cmd_render_report(args: argparse.Namespace) -> int:
+    """从 ledger+events 派生测试报告（只读渲染，可重建）。"""
+    as_json = bool(args.json)
+    change_dir = resolve_path(args.change_dir)
+    if not change_dir.is_dir():
+        return emit_error(
+            f"change directory does not exist: {change_dir}",
+            as_json=as_json,
+            error_code="CHANGE_DIR_NOT_FOUND",
+        )
+
+    # 渲染报告与手写报告不并存（设计 §5）：已存在手写报告（无 generated
+    # 标记）时拒绝渲染，避免同一 change 出现两份事实来源。
+    existing_reports = _find_existing_test_reports(change_dir)
+    handwritten = [
+        path
+        for path in existing_reports
+        if not _report_has_generated_marker(path)
+    ]
+    if handwritten:
+        return emit_error(
+            "hand-written test report already exists; rendered and hand-written "
+            "reports must not coexist in one change: "
+            + ", ".join(str(p) for p in handwritten),
+            as_json=as_json,
+            error_code="HANDWRITTEN_REPORT_EXISTS",
+            extra={
+                "existingReports": [str(p) for p in handwritten],
+                "recoveryAction": (
+                    "旧 change 沿用手写报告完成；新 change 不要手写报告，"
+                    "直接使用 render-report"
+                ),
+            },
+        )
+
+    import harness_events as he
+
+    try:
+        ledger, ledger_path = load_ledger(change_dir)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return emit_error(
+            f"ledger unreadable: {exc}",
+            as_json=as_json,
+            error_code="LEDGER_UNREADABLE",
+        )
+
+    events_summary: dict[str, Any] | None = None
+    events_file = he.events_path(change_dir)
+    if events_file.is_file() and events_file.stat().st_size > 0:
+        try:
+            events = he.load_events_cached(events_file)
+            events_summary = he.build_summary(change_dir, events)
+        except (OSError, ValueError):
+            events_summary = None
+
+    # base/head：ledger v3 优先，其次 state-snapshot（与 diff-hash 同序）。
+    # 项目根：.harness 祖先（与归档 find_project_root 同法）；变更声明
+    # 执行 worktree 时优先 worktree 根（产品文件在那里）。
+    project = _render_report_project_root(change_dir)
+    base_commit = None
+    head_commit = None
+    if isinstance(ledger, dict):
+        base_commit = str(ledger.get("baseCommit") or "").strip() or None
+    if project is not None:
+        head_commit = _git_text(project, "rev-parse", "--verify", "HEAD")
+    if not base_commit and project is not None:
+        base_commit = _immutable_change_base(change_dir, project) or None
+
+    changed_files = _render_report_changed_files(
+        project, base_commit, head_commit
+    )
+    scenario_summary = _render_report_scenario_summary(change_dir)
+
+    rendered_at = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    body = _render_report_markdown(
+        change_dir=change_dir,
+        change_name=change_dir.name,
+        rendered_at=rendered_at,
+        ledger=ledger,
+        events_summary=events_summary,
+        changed_files=changed_files,
+        base_commit=base_commit,
+        head_commit=head_commit,
+        scenario_summary=scenario_summary,
+    )
+
+    out_raw = getattr(args, "out", None)
+    if _nonempty_str(out_raw):
+        out_path = Path(str(out_raw)).expanduser()
+        if not out_path.is_absolute():
+            out_path = change_dir / out_path
+    else:
+        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
+        out_path = change_dir / "reports" / "test" / f"test-report-{stamp}.md"
+    out_path = out_path.resolve()
+    # 越界防护（与 scenario-receipt-template --out 同规则）。
+    change_resolved = change_dir.resolve()
+    cwd = Path.cwd().resolve()
+    if not (
+        _is_relative_to(out_path, change_resolved)
+        or _is_relative_to(out_path, cwd)
+    ):
+        return emit_error(
+            "--out 解析后越出项目目录: " + str(out_path),
+            as_json=as_json,
+            error_code="REPORT_OUT_OF_PROJECT",
+        )
+    try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(body, encoding="utf-8", newline="\n")
+    except OSError as exc:
+        return emit_error(
+            f"cannot write report: {exc}",
+            as_json=as_json,
+            error_code="REPORT_WRITE_FAILED",
+        )
+
+    payload = {
+        "ok": True,
+        "action": "render-report",
+        "path": str(out_path),
+        "changeName": change_dir.name,
+        "generator": REPORT_RENDER_VERSION,
+        "changedFileCount": len(changed_files),
+        "verificationCount": (
+            len(
+                [
+                    k
+                    for k, v in (ledger or {}).get("validations", {}).items()
+                    if isinstance(v, dict)
+                ]
+            )
+            if isinstance(ledger, dict)
+            else 0
+        ),
+        "scenarioCoverageCode": (
+            str(scenario_summary.get("code"))
+            if isinstance(scenario_summary, dict)
+            else None
+        ),
+        "ledgerPath": str(ledger_path) if ledger_path else None,
+    }
+    if as_json:
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    else:
+        sys.stdout.write(f"{out_path}\n")
+    return 0
+
+
+def _find_existing_test_reports(change_dir: Path) -> list[Path]:
+    """与 harness_archive.find_test_reports 同一 glob 集（本地实现避免环）。"""
+    patterns = [
+        "tests/test-report-*.md",
+        "reports/test/test-report-*.md",
+        "reports/test/*.md",
+    ]
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(change_dir.glob(pattern)):
+            if path in seen:
+                continue
+            seen.add(path)
+            found.append(path)
+    return found
+
+
+def _report_has_generated_marker(path: Path) -> bool:
+    """frontmatter 含 generated: true 即渲染产物（只读头部探测）。"""
+    try:
+        with path.open("r", encoding="utf-8-sig") as handle:
+            head = handle.read(2048)
+    except OSError:
+        return False
+    if not head.startswith("---"):
+        return False
+    end = head.find("\n---", 3)
+    if end == -1:
+        return False
+    frontmatter = head[:end]
+    return re.search(r"^generated:\s*true\s*$", frontmatter, re.MULTILINE) is not None
+
+
 def cmd_diff_hash(args: argparse.Namespace) -> int:
     as_json = bool(args.json)
     repo_raw = getattr(args, "repo", None)
@@ -3915,6 +4448,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_receipt.set_defaults(func=cmd_scenario_receipt_template)
+
+    p_render = sub.add_parser(
+        "render-report",
+        parents=[shared_json],
+        help=(
+            "derive the test report from ledger+events "
+            "(batch 2 WI-4a; read-only render, rebuildable)"
+        ),
+    )
+    p_render.add_argument("--change-dir", "--change", dest="change_dir", required=True)
+    p_render.add_argument(
+        "--out",
+        default=None,
+        help=(
+            "write the report to this path instead of "
+            "reports/test/test-report-YYYYMMDD-HHmm.md; relative paths "
+            "resolve against --change-dir"
+        ),
+    )
+    p_render.set_defaults(func=cmd_render_report)
 
     return parser
 

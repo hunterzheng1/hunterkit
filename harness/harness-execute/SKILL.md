@@ -111,11 +111,11 @@ python <skills-root>/scripts/harness_test_guard.py record --project . --change-d
 | **Worktree** | `requested=true` 时代码只写 worktree |
 | **构建/测试** | 一律经 `harness_test_runner.py exec`；禁止裸跑；`TEST_RUN_ALREADY_ACTIVE` 表示已有构建在跑，等待而非另起 |
 | **租约** | 阶段超 TTL 由 close 自动用原 run-id 重取，无需续租；`LEASE_ABSENT`/`LEASE_INVALID` 才需人工 `harness_change.py claim`，一律不重跑 begin |
-| **报告** | 区分"产品测试"与"工具维护"；API 维度 `OK`/`PARTIAL`/`BLOCKED`/`NOT_RUN`/`FAIL` 五态 |
+| **报告** | 区分"产品测试"与"工具维护"；API 维度 `OK`/`PARTIAL`/`BLOCKED`/`NOT_RUN`/`FAIL` 五态；报告用 `render-report` 派生（模型只追加解读段落） |
 
 ## Output Format
 
-变更文件表 + 构建/测试证据 + 场景覆盖摘要 + 最终状态（✅OK / 🟡WARN / ❌FAIL）。测试报告保存到 `.harness/changes/<change-name>/reports/test/test-report-YYYYMMDD-HHmm.md`。
+测试报告由脚本派生（批次 2 WI-4a）：`harness_ledger.py render-report --change-dir <dir> [--out <path>]` 从 ledger+events 渲染变更文件表 + 验证证据 + 场景覆盖摘要 + 五态状态，默认写 `.harness/changes/<change-name>/reports/test/test-report-YYYYMMDD-HHmm.md`（frontmatter 带 `generated: true`）。模型只在报告文末「解读（模型追加）」段落补充残余风险与下一步，不改写派生内容；报告可随时重渲染重建，不作为第二份可写状态。渲染报告与手写报告不并存于同一 change——旧 change 已有手写报告时沿用旧路径完成，新 change 不要手写。
 
 ## 渐进披露
 

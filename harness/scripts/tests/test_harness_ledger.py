@@ -2935,5 +2935,352 @@ class RecordFromReceiptTests(unittest.TestCase):
             self.assertEqual(len(unit_targets), 1)
 
 
+class RenderReportTests(unittest.TestCase):
+    """批次 2 WI-4a：render-report（测试报告派生，消不对称 E）。"""
+
+    def _setup_change(self, tmp: str) -> tuple[Path, Path]:
+        project = Path(tmp)
+        # git init：变更文件表与 base/head 推导需要仓库
+        subprocess.run(
+            ["git", "init", "-q"], cwd=str(project), check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "t@example.com"],
+            cwd=str(project), check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "t"],
+            cwd=str(project), check=True, capture_output=True,
+        )
+        # 种子文件：空仓库 git commit 会失败
+        (project / "README.md").write_text("seed\n", encoding="utf-8")
+        change = project / ".harness" / "changes" / "rr-task"
+        (change / "evidence").mkdir(parents=True)
+        return project, change
+
+    def _commit(self, project: Path, message: str) -> str:
+        subprocess.run(
+            ["git", "add", "-A"], cwd=str(project), check=True,
+            capture_output=True,
+        )
+        proc = subprocess.run(
+            ["git", "commit", "-q", "-m", message],
+            cwd=str(project), check=True, capture_output=True, text=True,
+        )
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(project), check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _write_ledger(
+        self, change: Path, validations: dict, *, base_commit: str | None = None
+    ) -> None:
+        path = change / "evidence" / "verification-ledger.json"
+        data: dict = {"schemaVersion": 3, "validations": validations}
+        if base_commit:
+            data["baseCommit"] = base_commit
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _render(
+        self, change: Path, *, out: str | None = None
+    ) -> tuple[int, dict | None, str]:
+        from io import StringIO
+
+        argv = ["--json", "render-report", "--change-dir", str(change)]
+        if out:
+            argv += ["--out", out]
+        buf = StringIO()
+        err = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(err):
+            code = harness_ledger.main(argv)
+        raw = buf.getvalue().strip()
+        payload = json.loads(raw) if raw else None
+        return code, payload, err.getvalue()
+
+    def test_renders_all_sections_from_ledger_and_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            base = self._commit(project, "base")
+            src = project / "src" / "app.py"
+            src.parent.mkdir(parents=True)
+            src.write_text("x = 1\n", encoding="utf-8")
+            head = self._commit(project, "add app")
+            self._write_ledger(
+                change,
+                {
+                    "unitTest": {
+                        "status": "OK",
+                        "command": "npm test",
+                        "exitCode": 0,
+                        "durationMs": 4200,
+                        "evidence": "Tests run: 31, Failures: 0, Errors: 0",
+                        "scope": "module",
+                        "coverage": "module",
+                        "metrics": {"total": 31, "passed": 31, "failed": 0},
+                        "finishedAt": "2026-09-09T10:00:00+08:00",
+                    },
+                    "compile": {
+                        "status": "FAIL",
+                        "command": "tsc --noEmit",
+                        "exitCode": 2,
+                        "durationMs": 800,
+                        "evidence": "error TS1: bad",
+                    },
+                },
+                base_commit=base,
+            )
+            (change / "events.ndjson").write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "phase.start",
+                                "phase": "execute",
+                                "timestamp": "2026-09-09T09:00:00+08:00",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "phase.end",
+                                "phase": "execute",
+                                "status": "PASS",
+                                "timestamp": "2026-09-09T10:00:00+08:00",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            code, payload, err = self._render(change)
+            self.assertEqual(code, 0, msg=err or payload)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["action"], "render-report")
+            self.assertEqual(payload["changeName"], "rr-task")
+            self.assertEqual(payload["changedFileCount"], 1)
+            self.assertEqual(payload["verificationCount"], 2)
+
+            report = Path(payload["path"])
+            self.assertTrue(report.is_file())
+            # 默认落 reports/test/test-report-*.md（find_test_reports 兼容）
+            self.assertEqual(report.parent, change / "reports" / "test")
+            self.assertTrue(report.name.startswith("test-report-"))
+            text = report.read_text(encoding="utf-8")
+            # frontmatter 生成标记
+            self.assertIn("generated: true", text)
+            self.assertIn("generator: harness-render-report-1", text)
+            # 变更文件表
+            self.assertIn("## 变更文件", text)
+            self.assertIn("src/app.py", text)
+            self.assertIn(f"`{base[:12]}..{head[:12]}`", text)
+            # 验证证据
+            self.assertIn("## 验证证据", text)
+            self.assertIn("unitTest", text)
+            self.assertIn("compile", text)
+            self.assertIn("npm test", text)
+            self.assertIn("Tests run: 31", text)
+            self.assertIn("total=31", text)
+            # 五态
+            self.assertIn("## 五态状态总览", text)
+            # 阶段摘要（events）
+            self.assertIn("## 阶段执行摘要（events）", text)
+            self.assertIn("execute", text)
+            # 模型解读占位
+            self.assertIn("## 解读（模型追加）", text)
+            self.assertIn("### 残余风险", text)
+            self.assertIn("### 下一步", text)
+
+    def test_five_state_reused_and_retested(self) -> None:
+        entry_reused = {"status": "OK", "reused": "true"}
+        self.assertEqual(
+            harness_ledger._render_report_five_state(entry_reused), "REUSED"
+        )
+        entry_retested = {
+            "status": "OK",
+            "attempts": [
+                {"status": "FAIL"},
+                {"status": "OK"},
+            ],
+        }
+        self.assertEqual(
+            harness_ledger._render_report_five_state(entry_retested), "RETESTED"
+        )
+        entry_plain = {"status": "FAIL"}
+        self.assertEqual(
+            harness_ledger._render_report_five_state(entry_plain), "FAIL"
+        )
+        entry_empty: dict = {}
+        self.assertEqual(
+            harness_ledger._render_report_five_state(entry_empty), "UNKNOWN"
+        )
+
+    def test_out_flag_writes_custom_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            self._write_ledger(change, {})
+
+            code, payload, err = self._render(
+                change, out="reports/test/custom.md"
+            )
+            self.assertEqual(code, 0, msg=err or payload)
+            report = Path(payload["path"])
+            self.assertEqual(
+                report, (change / "reports" / "test" / "custom.md").resolve()
+            )
+            self.assertTrue(report.is_file())
+
+    def test_out_path_escape_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            self._write_ledger(change, {})
+            outside = project.parent / "escape.md"
+
+            code, payload, err = self._render(
+                change, out=str(outside)
+            )
+            self.assertEqual(code, 1)
+            envelope = json.loads(err)
+            self.assertEqual(envelope["code"], "REPORT_OUT_OF_PROJECT")
+            self.assertFalse(outside.is_file())
+
+    def test_handwritten_report_blocks_render(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            self._write_ledger(change, {})
+            handwritten = change / "reports" / "test" / "test-report-20260101-0000.md"
+            handwritten.parent.mkdir(parents=True, exist_ok=True)
+            handwritten.write_text(
+                "## 测试报告 — 手写\n（无 frontmatter）\n", encoding="utf-8"
+            )
+
+            code, payload, err = self._render(change)
+            self.assertEqual(code, 1)
+            envelope = json.loads(err)
+            self.assertEqual(envelope["code"], "HANDWRITTEN_REPORT_EXISTS")
+            self.assertIn("recoveryAction", envelope)
+            # 不产生第二份报告
+            reports = list((change / "reports" / "test").glob("*.md"))
+            self.assertEqual(reports, [handwritten])
+
+    def test_generated_report_allows_rerender(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            self._write_ledger(
+                change,
+                {
+                    "unitTest": {
+                        "status": "OK",
+                        "command": "npm test",
+                        "exitCode": 0,
+                        "durationMs": 100,
+                        "evidence": "ok",
+                    }
+                },
+            )
+            code, payload, err = self._render(change)
+            self.assertEqual(code, 0, msg=err or payload)
+            first = Path(payload["path"])
+            self.assertTrue(first.is_file())
+            # 渲染产物带生成标记 → 重渲染不被手写报告检查阻断
+            code2, payload2, err2 = self._render(change)
+            self.assertEqual(code2, 0, msg=err2 or payload2)
+            second = Path(payload2["path"])
+            self.assertTrue(second.is_file())
+            # 同分钟内重渲染幂等覆盖同一文件（分钟粒度时间戳）
+            self.assertEqual(first, second)
+
+    def test_empty_ledger_renders_with_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            # 无 ledger、无 events、无 manifest
+            code, payload, err = self._render(change)
+            self.assertEqual(code, 0, msg=err or payload)
+            text = Path(payload["path"]).read_text(encoding="utf-8")
+            self.assertIn("（ledger 无验证记录）", text)
+            self.assertIn("（无 scenario-manifest 或检查不适用）", text)
+            self.assertIn("（无提交间差异或 base/head 不可得）", text)
+
+    def test_scenario_coverage_summary_rendered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, change = self._setup_change(tmp)
+            self._write_ledger(
+                change,
+                {
+                    "apiTest": {
+                        "status": "OK",
+                        "command": "pytest api",
+                        "exitCode": 0,
+                        "durationMs": 5000,
+                        "evidence": "3/3 passed",
+                        "scenarioIds": ["SC-001"],
+                        "scenarioReceipt": {
+                            "schemaVersion": 1,
+                            "runner": {"name": "pytest"},
+                            "attempt": 1,
+                            "declared": ["SC-001"],
+                            "selected": ["SC-001"],
+                            "collected": [
+                                {
+                                    "testId": "SC-001",
+                                    "file": "tests/api/test_sc001.py",
+                                    "title": "scenario 1",
+                                }
+                            ],
+                            "executed": [
+                                {
+                                    "testId": "SC-001",
+                                    "file": "tests/api/test_sc001.py",
+                                    "title": "scenario 1",
+                                    "attempt": 1,
+                                    "status": "PASSED",
+                                }
+                            ],
+                        },
+                    }
+                },
+            )
+            (change / "meta").mkdir()
+            (change / "meta" / "scenario-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 2,
+                        "scenarios": [
+                            {
+                                "id": "SC-001",
+                                "priority": "P0",
+                                "requiredEvidenceKind": "ledger",
+                                "ownerPhase": "execute",
+                                "executableTestId": "SC-001",
+                                "testFile": "tests/api/test_sc001.py",
+                                "testTitle": "scenario 1",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            code, payload, err = self._render(change)
+            self.assertEqual(code, 0, msg=err or payload)
+            self.assertEqual(payload["scenarioCoverageCode"], "SCENARIO_COVERAGE_OK")
+            text = Path(payload["path"]).read_text(encoding="utf-8")
+            self.assertIn("## 场景覆盖摘要", text)
+            self.assertIn("SC-001", text)
+            self.assertIn("SCENARIO_COVERAGE_OK", text)
+
+    def test_change_dir_not_found(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no-such-change"
+            code, payload, err = self._render(missing)
+            self.assertEqual(code, 1)
+            envelope = json.loads(err)
+            self.assertEqual(envelope["code"], "CHANGE_DIR_NOT_FOUND")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -626,7 +626,9 @@ TEST_<change-name>_<timestamp>_<short-random>
 
 ## 输出格式（测试报告模板）
 
-测试完成后，将报告保存到 `.harness/changes/<change-name>/reports/test/test-report-YYYYMMDD-HHmm.md`（时间戳格式：日期+时分），同时在控制台输出摘要。
+测试完成后，**推荐路径（批次 2 WI-4a）**：用 `harness_ledger.py render-report --change-dir <dir>` 从 ledger+events 派生报告（变更文件表/验证证据/场景覆盖摘要/五态状态自动生成，frontmatter 带 `generated: true`），模型只在文末「解读（模型追加）」段落补充残余风险与下一步。渲染报告与手写报告**不并存**于同一 change——已存在手写报告（无生成标记）时 render-report 会拒绝（`HANDWRITTEN_REPORT_EXISTS`），旧 change 沿用手写路径完成。
+
+下方手写模板保留给旧 change 与 render-report 不可用时的回退；新 change 不要手写。报告保存到 `.harness/changes/<change-name>/reports/test/test-report-YYYYMMDD-HHmm.md`（时间戳格式：日期+时分），同时在控制台输出摘要。
 
 ```markdown
 ## 测试报告 — <功能名>
@@ -769,6 +771,12 @@ python <skills-root>/scripts/harness_ledger.py can-reuse --change-dir <dir> --ve
 
 # scenario-manifest schemaVersion 2：绑定场景必须带 receipt，先生成骨架再 record
 python <skills-root>/scripts/harness_ledger.py scenario-receipt-template --change-dir <dir> --scenario-ids "API-001,API-002" --runner <runner 名> --out runtime/scenario-receipt-api.json --json
+
+# 测试报告派生（推荐路径，批次 2 WI-4a）：从 ledger+events 渲染，模型只追加解读段落
+python <skills-root>/scripts/harness_ledger.py render-report --change-dir <dir> --json
+#   默认写 reports/test/test-report-YYYYMMDD-HHmm.md（generated: true 标记）；
+#   自定义路径用 --out（相对路径按 --change-dir 解析）；
+#   已有手写报告时报 HANDWRITTEN_REPORT_EXISTS——旧 change 沿用手写路径。
 ```
 
 > **Ledger v3（v2 契约 / split-v1 布局起）**：`record` 强制顶层身份（缺失非零退出、不写账本）；`--metrics-json` 必须过 typed schema（unit/apiTest/browserTest/apiContract/dbCompatibility 各有不同必填键）；`browserTest` 在报告中投影为 `browserE2E`；dbCompatibility 等不适用验证用 `--applicability NOT_APPLICABLE --applicability-reason "<scope 原因>"`（不计通过也不计失败）。legacy 契约行为不变。详见 `../protocols/ledger-protocol.md` 第十节。
@@ -790,6 +798,7 @@ python <skills-root>/scripts/harness_ledger.py scenario-receipt-template --chang
 | `record` 缺 `--duration-ms` / `--evidence` | 参数为必填 | 按模板补齐 |
 | `PROJECT_ROOT_INVALID` | `--project` 传了项目名而不是路径 | 传 `.` 或绝对路径；报错的 `resolvedProject` 显示实际解析结果 |
 | `SCENARIO_RECEIPT_REQUIRED` | manifest 是 schemaVersion 2，`--scenario-ids` 必须配 receipt | 用 `scenario-receipt-template` 生成骨架 |
+| `HANDWRITTEN_REPORT_EXISTS`（render-report） | 同一 change 已有手写测试报告（无 `generated: true` 标记） | 旧 change 沿用手写报告完成；新 change 不要手写，直接用 render-report |
 | `SCENARIO_RECEIPT_NOT_FOUND` | receipt 路径找不到 | 看报错的 `triedPaths`；相对路径同时按 CWD 与 `--change-dir` 解析 |
 | `REQUIRED_SCENARIO_NOT_EXECUTED`（test 关门） | `ownerPhase=test` 的场景到 test 阶段仍无通过 receipt——这是真阻塞 | 补跑该场景；接口被验证码挡住时按 `testing-pitfalls.md` 规则 31 记 BLOCKED，不得伪造 receipt |
 
