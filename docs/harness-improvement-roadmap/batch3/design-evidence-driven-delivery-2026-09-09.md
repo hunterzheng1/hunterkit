@@ -15,7 +15,7 @@
 | # | 问题 | 建议 | 理由 |
 |---|---|---|---|
 | 1 | B2-5（tier/mode 双轨）修复深度：仅加告警 vs 信号表对齐+单一权威 | **分两步：先告警（批次 3 内），对齐列为独立工作项** | 告警是零风险止血（半天级）；信号表对齐动 Python classify 与 CLI classifyPlan 两处 + 契约测试，需要独立设计（见 WI-1） |
-| 2 | T5 补测时机：B2-5 对齐前 vs 后 | **对齐后** | 对齐前 full 档声明走 plan 文档 `风险等级:` 正则，对齐后走统一信号表——补测结果才对最终形态有效 |
+| 2 | T5 补测时机：B2-5 对齐前 vs 后 | **对齐后，apiTest 探针前置到快车道** | 对齐前补测的门槛判定与审计轨迹走双轨（tier=full/mode=assurance 并存），大概率需对齐后重跑确认——双倍试点成本；且 full 档阶段集推导经过 requiredRetained 静默覆盖路径（T6' 实证的 B2-5 bug 行为），测的不是最终形态。对齐后唯一实质代价是 apiTest 缺口发现晚，该代价用快车道探针（见 §2 快车道末项）以 ~1/10 成本捕获。周期串行是用代表性换的 |
 | 3 | 批次 3 原定范围（风险要求、局部失效、任务依赖与增量评审）是否全量进 | **按提案原范围推进，B2 系列修复作为前置快车道** | B2-1~6 是批次 2 试点直接产出的小修复，混入批次 3 主体会模糊交付物边界；快车道先行合入 |
 | 4 | B2-2（publish 丢 review）修复方向：publish 内透传 vs 文档明确直连 | **publish 内透传** | `--renew-review` 已有续签机制，缺的只是「input 无 adversarial_review 但磁盘 pack 有」的检测分支；文档直连是放弃编排收口，与 HP-18 目标相悖 |
 
@@ -72,6 +72,13 @@ unittest（项目测试锁冲突）。
 review run（从 events 或 gate 状态读）；`REVIEW_OUTPUTS_INVALID` 错误
 信封带 currentRunId。单测：缺 runId 自动回填 + 错误信封字段。
 
+**apiTest NOT_APPLICABLE 探针**（T5 前置，裁决 2 的配套项）：在任意
+scratch change 上验证 `harness_ledger.py record --verification apiTest
+--applicability NOT_APPLICABLE --applicability-reason "<scope 原因>"`
+路径存在且 gate close 接受该记账（不要求真实 API 执行）。这是 T5 补测
+要回答的问题中最独立于档位权威的一个——5 分钟探针替代整轮试点才能
+拿到的早发现价值。若路径缺失，记录为 B3-1 进待办池，不现场发明机制。
+
 ### WI-1：tier/mode 单一权威（B2-5 结构性修复）
 
 **现状**：Python `harness_gate.py classify`（tier: fast/standard/full，
@@ -106,8 +113,8 @@ ASSURANCE_SIGNALS）是两套独立裁决，信号表已对齐（risk-signal-inf
 - 完整流程：plan → execute → review → submit → archive 五阶段
   （full 档 defaultPhases）。
 - 验证集：compile/unitTest/unitTestFull/apiTest 四项（apiTest 首次在
-  完整流程实测——需先明确 apiTest 在无 API 项目里的 NOT_APPLICABLE
-  记账路径，这本身是补测要回答的问题）。
+  完整流程实测——NOT_APPLICABLE 记账路径已由快车道探针先行验证，
+  T5 运行验证其在 full 档 gate close 下的实际接受度）。
 - 测量点：full 档流程维护（对照 T4' 0.87 min——预期 review+submit
   仪式增加 ~0.5-1 min）；review 阶段全套仪式成本（T6' 已有部分数据）；
   post-run classify 升档路径（CONTRACT_SCHEMA_PATHS 命中时）。
@@ -133,11 +140,11 @@ ASSURANCE_SIGNALS）是两套独立裁决，信号表已对齐（risk-signal-inf
 ## 3. 实施顺序
 
 ```
-快车道（B2-1/2/3/4/6 + B2-5 止血告警）──┐
-                                          ├── WI-1（tier/mode 单一权威）
-                                          │        │
-                                          │        └── WI-2（T5 补测）
-                                          └── WI-3（批次 3 主体，独立设计）
+快车道（B2-1/2/3/4/6 + B2-5 止血告警 + apiTest 探针）──┐
+                                                          ├── WI-1（tier/mode 单一权威）
+                                                          │        │
+                                                          │        └── WI-2（T5 补测）
+                                                          └── WI-3（批次 3 主体，独立设计）
 ```
 
 - 快车道先行合入（小修复 + 止血，不阻塞任何项）。
@@ -158,6 +165,6 @@ ASSURANCE_SIGNALS）是两套独立裁决，信号表已对齐（risk-signal-inf
 | 风险 | 缓解 |
 |---|---|
 | WI-1 信号表合并引入双端行为漂移 | 共享 JSON + 契约测试先行；历史 change 读时兼容不回写 |
-| T5 补测发现 apiTest 路径缺失 | 这是补测目的之一——发现即记录为 B3 系列，不现场发明机制 |
+| T5 补测发现 apiTest 路径缺失 | 早发现已由快车道探针捕获（缺失则记 B3-1）；T5 运行中再发现属探针未覆盖的交互问题，发现即记录为 B3 系列，不现场发明机制 |
 | 快车道与 WI-1 止血项重复 | 止血告警代码标注 `// B2-5 stopgap: WI-1 落地后移除` |
 | 批次 3 主体范围膨胀 | WI-3 每子项独立设计文档 + 用户裁决后才实施 |
