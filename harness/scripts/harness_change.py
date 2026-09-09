@@ -1830,6 +1830,9 @@ def _status_phase_identity(
     权威顺序与 context_view/gate close 的写入顺序一致：
     1. 有转换收据 → 最新收据 toPhase 即当前阶段（v2 plan finalize 不写
        plan 的 phase.end，plan start 永远 open，不能压过收据）；
+       但 toPhase 阶段自身已有 phase.end 且没有以它为 fromPhase 的收据
+       → gate close 在该阶段中断（end 已写、handoff 未落盘），
+       handoffPending=true；
     2. 无收据但最新 phase.end 已写 → gate close 中断窗口（phase.end 先于
        handoff 落盘）：阶段仍按 end 的阶段，handoffPending=true；
     3. committed 发布 journal（plan 完成的机器证据）→ T6 式中断窗口：
@@ -1848,6 +1851,25 @@ def _status_phase_identity(
 
     if transitions:
         phase = harness_paths.resolve_phase_name(transitions[-1].get("toPhase"))
+        # toPhase 阶段已关门（phase.end）但没有推进出它的收据 →
+        # gate close 在 end 与 handoff 之间中断
+        ended_phases = {
+            harness_paths.resolve_phase_name(event.get("phase"))
+            for event in events
+            if event.get("type") == "phase.end"
+        }
+        advanced_from = {
+            harness_paths.resolve_phase_name(receipt.get("fromPhase"))
+            for receipt in transitions
+        }
+        if phase in ended_phases and phase not in advanced_from:
+            handoff_pending = True
+            return {
+                "phase": phase,
+                "runId": None,
+                "attempt": None,
+                "handoffPending": handoff_pending,
+            }
         if open_phase is not None and open_name != phase:
             # 收据推进后的旧 start（典型：v2 plan）不再提供 run 身份
             run_id = None

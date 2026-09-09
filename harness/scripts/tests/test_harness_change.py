@@ -1143,6 +1143,37 @@ class RecoveryViewTests(unittest.TestCase):
         self.assertIn("--to-phase", view["nextAction"])
         self.assertIn("幂等续跑", view["nextAction"])
 
+    def test_full_flow_crash_window_after_bootstrap_execute_receipt(self) -> None:
+        """bootstrap-execute 之后的 gate close 中断（pilot 实测路径）。
+
+        prepare 已补录 plan→execute 收据，随后 execute 的 phase.end 已写、
+        execute→submit 收据未落盘——收据分支不能吞掉这个中断窗口。
+        """
+        context = load_module("harness_context_view_test", "harness_context.py")
+        self._make_full_flow_change("demo-flow")
+        skills_root = self._make_bundle_identity("tester")
+        result = context.bootstrap_execute(
+            self.project, change="demo-flow", executor="tester", task=1,
+            skills_root=str(skills_root),
+        )
+        self.assertTrue(result.get("ok"), result)
+        events = load_module("harness_events_view_test", "harness_events.py")
+        events.append_event(
+            self.changes / "demo-flow",
+            phase="execute",
+            type_="phase.end",
+            run_id=result["runId"],
+            attempt=1,
+            status="OK",
+        )
+
+        view = change.change_recovery_view(self.project, "demo-flow")
+
+        self.assertTrue(view["handoffPending"])
+        self.assertEqual(view["currentPhase"], "execute")
+        self.assertIsNone(view["runId"])
+        self.assertIn("--to-phase", view["nextAction"])
+
     def test_full_flow_ledger_verifications_aggregated(self) -> None:
         """ledger 各 verification kind 的最新 attempt 状态聚合。"""
         change_dir = self._make_full_flow_change("demo-flow")
