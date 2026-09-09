@@ -29,6 +29,15 @@ import {
   inferRiskSignals,
   parsePorcelainPaths
 } from "../plan-evidence/risk-signal-inference.js";
+import {
+  CAPABILITY_VALUES,
+  inferCapabilities,
+  type PlanCapability
+} from "../plan-evidence/capability-inference.js";
+import {
+  deriveBaseline,
+  lastKnownAttempt
+} from "../plan-evidence/publication-bookkeeping.js";
 
 export interface PlanEvidencePackOptions {
   input: string;
@@ -49,6 +58,8 @@ export interface PlanEvidencePackOptions {
  * - 受枚举/哈希/路径约束的字段一律给**真实合法值**，不用 `<...>`
  * - 自由文本字段才用 `<...>`，便于逐项替换后 grep `<` 自检
  * - 必须换成真值但无法带 `<` 的字段（run_id/content_hash）用自解释占位量
+ * - 可推导字段（risk_signals/capabilities/attempt/expected_baseline）模板默认
+ *   整项省略——省略即推荐写法，命令推导并回显（derived 块），模型可核对
  */
 const EVIDENCE_PACK_TEMPLATE = {
   // 必须换成真实 change-name；受 kebab-case 约束（^[a-z0-9]+(-[a-z0-9]+)*$），带不了 <>
@@ -56,7 +67,7 @@ const EVIDENCE_PACK_TEMPLATE = {
   // 枚举见 PLAN_RISK_SIGNALS：api_change/artifact_protocol/auth/breaking_contract/
   // concurrency/cross_file/delete/docs_only/irreversible_operation/migration/
   // narrow_fix/payment/permission/production_code/security/shared_state/user_visible_behavior。
-  // 可留空数组：命令会按 affected_paths 与 git status 推断信号并与手填取并集，
+  // 可整项省略（推荐）：命令按 affected_paths 与 git status 推断信号并与手填取并集，
   // 逐条标注来源（declared / inferred / declared+inferred），手填不能删除推断项。
   risk_signals: ["production_code"],
   mode: "standard",
@@ -172,7 +183,9 @@ const EVIDENCE_PACK_TEMPLATE = {
     approved_scopes: [{ text: "<纳入范围条目>" }]
   },
   machine: {
-    // 枚举：api/concurrency/database/filesystem/migration/network/permissions/security/ui
+    // 枚举：api/concurrency/database/filesystem/migration/network/permissions/security/ui。
+    // 可整项省略（推荐）：命令按 affected_paths 与 git status 推断并与手填取并集，
+    // 逐条标注来源；手填不能删除推断项（多推一个能力只会多开质量透镜，更严不更松）
     capabilities: [],
     worktree_policy: "project_default"
   },
@@ -180,10 +193,13 @@ const EVIDENCE_PACK_TEMPLATE = {
     project_id: "<project.yaml 的 project_id>",
     // 必须换成阶段 0.5 生成、phase.start 已用的同一个 plan-run-id
     run_id: "plan_replace-with-your-plan-run-id",
-    branch_name: "<当前分支>",
-    attempt: 1
-  },
-  expected_baseline: { state: "absent", manifest_hash: null, generation: 0 }
+    branch_name: "<当前分支>"
+    // attempt 可省略（推荐）：命令按 plan-events.ndjson 已发布 attempt 自动递增，
+    // 无历史时取 1；显式给出时尊重原值
+  }
+  // expected_baseline 可整项省略（推荐）：命令从 meta/publication-journals 的
+  // committed journal 派生（上次 manifest 哈希 + generation），无历史时取
+  // {state:"absent", manifest_hash:null, generation:0}；显式给出时尊重原值
 } as const;
 
 /**
@@ -198,7 +214,8 @@ const EVIDENCE_PACK_TEMPLATE = {
  */
 interface EvidencePackInputFile {
   change_key: string;
-  risk_signals: readonly string[];
+  // 可省略：命令按 affected_paths + git status 推断并与手填取并集（安全地板）
+  risk_signals?: readonly string[];
   mode?: "quick" | "standard" | "assurance";
   intent: {
     source_input: string;
@@ -248,16 +265,19 @@ interface EvidencePackInputFile {
     ownership?: readonly Record<string, unknown>[];
   };
   machine: {
-    capabilities: readonly string[];
+    // 可省略：命令按 affected_paths + git status 推断并与手填取并集（安全地板）
+    capabilities?: readonly string[];
     worktree_policy: string;
   };
   context: {
     project_id: string;
     run_id: string;
     branch_name: string;
-    attempt: number;
+    // 可省略：命令按 plan-events.ndjson 已发布 attempt 自动递增，无历史时取 1
+    attempt?: number;
   };
-  expected_baseline: { state: "absent"; manifest_hash: null; generation: 0 } |
+  // 可省略：命令从 publication-journals 派生，无历史时取 absent 三元
+  expected_baseline?: { state: "absent"; manifest_hash: null; generation: 0 } |
     { state: "present"; manifest_hash: string; generation: number };
 }
 
@@ -562,8 +582,72 @@ function collectInputProblems(input: EvidencePackInputFile): readonly InputProbl
   if (!isRecord(machine)) {
     problems.push({ field_path: "machine", message: "必须是对象" });
   } else {
+    const keyProblem = keySetProblem(machine, "machine", ["worktree_policy"],
+      ["capabilities", "worktree_policy"]);
+    if (keyProblem !== undefined) problems.push(keyProblem);
     const policyProblem = enumProblem(machine, "worktree_policy", "machine", WORKTREE_POLICIES);
     if (policyProblem !== undefined) problems.push(policyProblem);
+    // capabilities 枚举在边界报清——缺省走推断，给了非法值不能等 core 抛无定位码
+    if ("capabilities" in machine) {
+      if (!Array.isArray(machine.capabilities)) {
+        problems.push({ field_path: "machine.capabilities", message: "必须是字符串数组" });
+      } else {
+        machine.capabilities.forEach((capability, index) => {
+          if (typeof capability !== "string" || !(CAPABILITY_VALUES as readonly string[])
+              .includes(capability)) {
+            problems.push({
+              field_path: `machine.capabilities[${index}]`,
+              message: `取值必须是 ${CAPABILITY_VALUES.join(" | ")}`
+            });
+          }
+        });
+      }
+    }
+  }
+
+  // context 层：project_id/run_id/branch_name 必填（attempt 可省略走派生）
+  const contextValue: unknown = input.context;
+  if (!isRecord(contextValue)) {
+    problems.push({ field_path: "context", message: "必须是对象" });
+  } else {
+    const keyProblem = keySetProblem(contextValue, "context",
+      ["project_id", "run_id", "branch_name"], ["project_id", "run_id", "branch_name", "attempt"]);
+    if (keyProblem !== undefined) problems.push(keyProblem);
+    if ("attempt" in contextValue && (typeof contextValue.attempt !== "number" ||
+      !Number.isSafeInteger(contextValue.attempt) || contextValue.attempt < 1)) {
+      problems.push({ field_path: "context.attempt", message: "必须是 ≥1 的整数" });
+    }
+  }
+
+  // expected_baseline：可省略（派生）；给出时形状必须在边界报清
+  const baseline: unknown = input.expected_baseline;
+  if (baseline !== undefined) {
+    if (!isRecord(baseline)) {
+      problems.push({ field_path: "expected_baseline", message: "必须是对象" });
+    } else if (baseline.state === "absent") {
+      const keyProblem = keySetProblem(baseline, "expected_baseline",
+        ["state", "manifest_hash", "generation"], ["state", "manifest_hash", "generation"]);
+      if (keyProblem !== undefined) problems.push(keyProblem);
+      if (baseline.manifest_hash !== null || baseline.generation !== 0) {
+        problems.push({ field_path: "expected_baseline",
+          message: 'state:"absent" 时必须是 {state:"absent", manifest_hash:null, generation:0}' });
+      }
+    } else if (baseline.state === "present") {
+      const keyProblem = keySetProblem(baseline, "expected_baseline",
+        ["state", "manifest_hash", "generation"], ["state", "manifest_hash", "generation"]);
+      if (keyProblem !== undefined) problems.push(keyProblem);
+      if (typeof baseline.manifest_hash !== "string" ||
+        !SHA256_PATTERN.test(baseline.manifest_hash)) {
+        problems.push({ field_path: "expected_baseline.manifest_hash",
+          message: "必须是 sha256:<64 位小写十六进制>" });
+      }
+      if (typeof baseline.generation !== "number" ||
+        !Number.isSafeInteger(baseline.generation) || baseline.generation < 1) {
+        problems.push({ field_path: "expected_baseline.generation", message: "必须是 ≥1 的整数" });
+      }
+    } else {
+      problems.push({ field_path: "expected_baseline.state", message: '必须是 "absent" | "present"' });
+    }
   }
 
   // 决策层：节点键集/枚举/状态一致性；uncertainties 生成的未决决策必须被节点覆盖。
@@ -927,6 +1011,33 @@ export async function runPlanEvidencePack(
       gitStatusPaths
     });
 
+    // WI-4b：capabilities 同法推断（declared ∪ inferred，安全地板）。
+    // 省略或留空都走推断；手填不能删除推断项——多推一个能力只会多开质量透镜。
+    const capabilityInference = inferCapabilities({
+      declared: (input.machine.capabilities ?? []) as PlanCapability[],
+      affectedPaths,
+      gitStatusPaths
+    });
+    const effectiveCapabilities = capabilityInference.effective;
+
+    // WI-4b：attempt / expected_baseline 省略时派生（与 plan publish 步骤 2 同一
+    // 实现——两处各推一套会出现"pack 派生 present、publish 又按 absent 覆盖"的漂移）。
+    // 显式声明的值始终优先；派生值进 derived 回显块，模型可核对。
+    const changeDirForBookkeeping = join(
+      dependencies.cwd, ".harness", "changes", input.change_key);
+    const declaredAttempt = input.context.attempt;
+    const lastAttempt = await lastKnownAttempt(changeDirForBookkeeping);
+    const derivedAttempt = lastAttempt > 0 ? lastAttempt + 1 : 1;
+    const effectiveAttempt = declaredAttempt ?? derivedAttempt;
+    const declaredBaseline = input.expected_baseline;
+    const derivedBaseline = declaredBaseline === undefined
+      ? await deriveBaseline(changeDirForBookkeeping)
+      : undefined;
+    const effectiveBaseline = declaredBaseline ??
+      (derivedBaseline === undefined
+        ? { state: "absent" as const, manifest_hash: null, generation: 0 }
+        : { state: "present" as const, ...derivedBaseline });
+
     const profile = classifyPlan({ schema_version: 1, change_id: input.change_key,
       risk_signals: [...signalInference.effective], created_at: createdAt });
 
@@ -1129,7 +1240,7 @@ export async function runPlanEvidencePack(
           phase_set_source: phaseSetSource
         };
     const machine_input = { schema_version: 2 as const, profile, phase_set,
-      capabilities: input.machine.capabilities as never, worktree_policy: input.machine.worktree_policy as never,
+      capabilities: effectiveCapabilities as never, worktree_policy: input.machine.worktree_policy as never,
       ...(gatePolicyOverlay === undefined ? {} : { gate_policy_overlay: gatePolicyOverlay }) };
     const machine = model.deriveMachineArtifacts({ ...machine_input, human_input, human });
     const detail = model.deriveImplementationDetail({
@@ -1191,14 +1302,14 @@ export async function runPlanEvidencePack(
         change_key: input.change_key,
         run_id: input.context.run_id,
         branch_name: input.context.branch_name,
-        attempt: input.context.attempt,
+        attempt: effectiveAttempt,
         // provenance 标注只进 context（非哈希身份区）：审计能看到哪些信号是推断的、
         // capabilities 来自探针还是不可用回退、phase_set 来自 0.6 计划还是派生。
         capabilities_provenance: capabilitiesProvenance,
         signal_provenance: signalInference.provenance,
         phase_set_source: phaseSetSource
       },
-      expected_baseline: input.expected_baseline,
+      expected_baseline: effectiveBaseline,
       // HP-15：对抗评审收据透传。收据绑定本 pack 的产物哈希，任何字段变化后
       // 必须重跑评审/重新签发收据（plan review-record 可代算两个哈希）。
       ...(input.adversarial_review === undefined
@@ -1212,6 +1323,21 @@ export async function runPlanEvidencePack(
       ...(scopeInherited.length > 0 ? [`approval_scope_inherited:${scopeInherited.join(",")}`] : []),
       ...(goalInherited.length > 0 ? [`approval_goal_inherited:${goalInherited.join(",")}`] : [])
     ];
+    // WI-4b：省略字段的推导值回显——模型核对用，不改变任何门禁语义。
+    // 只回显省略（或留空）的字段；显式声明的值在输入里已有，不重复。
+    const derivedEcho: Record<string, unknown> = {};
+    if (input.risk_signals === undefined || input.risk_signals.length === 0) {
+      derivedEcho.risk_signals = signalInference.effective;
+    }
+    if (input.machine.capabilities === undefined || input.machine.capabilities.length === 0) {
+      derivedEcho.capabilities = effectiveCapabilities;
+    }
+    if (declaredAttempt === undefined) {
+      derivedEcho.attempt = effectiveAttempt;
+    }
+    if (declaredBaseline === undefined) {
+      derivedEcho.expected_baseline = effectiveBaseline;
+    }
     dependencies.stdout(JSON.stringify({
       ok: true,
       code: "PLAN_EVIDENCE_PACK_BUILT",
@@ -1221,6 +1347,8 @@ export async function runPlanEvidencePack(
       phase_set_source: phaseSetSource,
       capabilities_provenance: capabilitiesProvenance,
       signal_provenance: signalInference.provenance,
+      capability_provenance: capabilityInference.provenance,
+      ...(Object.keys(derivedEcho).length > 0 ? { derived: derivedEcho } : {}),
       ...(warnings.length > 0 ? { warnings } : {})
     }) + "\n");
     return 0;

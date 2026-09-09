@@ -348,6 +348,14 @@ status: approved
 1. `risk_signals` 不再是纯手填。`plan evidence-pack` 按 `structured_input.tasks[].affected_paths`（主源）与 `git status --porcelain --untracked-files=all`（次源）经 marker 表推断信号（与 `harness_gate.py` classify 同一张表），**与手填取并集**——推断是安全地板，手填不能删除推断项；逐条信号在 `pack.context.signal_provenance` 标注 `declared / inferred / declared+inferred`。
 2. `capabilities` 由命令真实探测：`is_git`（`rev-parse --is-inside-work-tree`）、`has_remote`（`git remote` 非空）、`uses_worktree`（`--git-dir` ≠ `--git-common-dir`，或 `machine.worktree_policy=required`）；探针不可用（非 git 目录/无 git）则全 false 并标注 `provenance: "unavailable"`。阶段 0.6 `configure-plan` 落的 `meta/gate-policy.json` `plannedPhases` 也会被读取（顶层 `plannedPhases` 为字符串数组才视为权威形状，v2 包装体/坏 JSON 一律回退派生），可选阶段照它取舍，required 阶段缺失时保留并在 stdout 告警 `phase_set_required_retained`，来源标注 `phase_set_source: gate-policy | derived`。
 
+**可推导字段省略（WI-4b，2026-09）**：`machine.capabilities`、`context.attempt`、`expected_baseline` 与 `risk_signals` 同法——省略即推荐写法，命令推导并回显：
+
+- `machine.capabilities`：按 affected_paths + git status 经 marker 表推断（移植 `harness_gate.py _diff_capabilities`，按九值枚举扩展；migration 命中联动 database），与手填取并集、逐条标注 `capability_provenance`；多推一个能力只会多开质量透镜（更严不更松）。
+- `context.attempt`：按 `meta/plan-events.ndjson` 已发布 attempt 自动递增，无历史取 1；显式给出时尊重原值。
+- `expected_baseline`：从 `meta/publication-journals` 的 committed journal 派生（与 publish 自动记账同一实现），无历史取 `{state:"absent", manifest_hash:null, generation:0}`。
+
+省略字段的推导值在成功输出的 `derived` 块回显（`derived.capabilities` / `derived.attempt` / `derived.expected_baseline` / `derived.risk_signals`），模型可核对；显式声明的字段不进回显。
+
 **权威已切换（2026-08）**：`meta/plan-profile.json` 是门禁权威。发布时 `plan evidence-pack` 把工作副本的 `requiredGateDag`/`requiredValidationsByPhase`/`tier`/`source` 并入 v2 gate_policy content（白名单键，哈希绑定），`harness_paths.load_change_gate_policy` 在 gate/context/phase/archive 各处统一 v2 优先：快照完整（含 `mode`/`planned_phases`/`required_gate_dag`/`required_validations_by_phase`）即以它为准；0.2.92-era 的不完整快照与未发布的 change 回退工作副本。两者并存且 `plannedPhases`（canonical 去重后）不一致 → drift 报告，以 v2 为准——发布后改写工作副本本身就是异常。provenance 标注只进 stdout 与 `pack.context`，不进任何哈希身份字段。
 
 `meta/implementation-checkpoints.json` 的情况不同：v2 包装体里的 `content.foundation_gate` 信息是够的，所以门禁在**只读侧**解包（`checkpoint_status` 同时认 `checkpoints[]`、顶层 `foundationGate` 与 v2 包装体三种形状），不改文件名。注意写回路径（`gate checkpoint approve`）仍然操作原始文档——用归一化结构覆盖会破坏 v2 产物的哈希绑定。
@@ -434,7 +442,10 @@ finalize 硬性要求证据包顶层 `adversarial_review` 收据，缺失即 `PL
 | `change_key` | `replace-with-change-name` | 真实 change-name（kebab-case：`^[a-z0-9]+(-[a-z0-9]+)*$`） |
 | `context.run_id` | `plan_replace-with-your-plan-run-id` | 阶段 0.5 生成、`phase.start` 已用的**同一个** plan-run-id |
 | `evidence_sources[].content_hash` | `sha256:deadbeef…` | 证据源内容的真实 sha256（校验器显式拒绝全 0） |
-| `risk_signals` | `["production_code"]` | 可留空数组：命令按 affected_paths 与 git status 推断并与手填取并集；手填只增不减 |
+| `risk_signals` | `["production_code"]` | 可整项省略（推荐）：命令按 affected_paths 与 git status 推断并与手填取并集；手填只增不减 |
+| `machine.capabilities` | （模板已省略） | 可整项省略（推荐）：命令按 affected_paths 与 git status 推断并与手填取并集 |
+| `context.attempt` | （模板已省略） | 可省略（推荐）：命令按 plan-events 已发布 attempt 自动递增，无历史取 1 |
+| `expected_baseline` | （模板已省略） | 可整项省略（推荐）：命令从 publication-journals 派生，无历史取 absent 三元 |
 
 **容易踩的硬约束**（违反时命令会给 `field_path`，不必再猜）：
 
@@ -465,9 +476,9 @@ finalize 硬性要求证据包顶层 `adversarial_review` 收据，缺失即 `PL
 | `structured_input.tasks` | task_id/objective/affected_paths/depends_on/owner_phase（refs 由命令接线，不写） | 5 |
 | `structured_input.scenarios` | scenario_id/title/acceptance/coverage_dimension/execution_level/risk_level（八维度全覆盖，缺维度由命令记 not_applicable） | 7 |
 | `structured_input.approved_scopes` | 批准边界文本列表（scope_ref 由命令按文本哈希派生） | 4 |
-| `machine` | capabilities/worktree_policy | 6 |
-| `context` | project_id/run_id/branch_name/attempt（复用 plan-run-id 与 attempt） | 0.5 |
-| `expected_baseline` | 首次发布 `{state:"absent", manifest_hash:null, generation:0}` | 8 |
+| `machine` | capabilities（可省略走推断）/worktree_policy | 6 |
+| `context` | project_id/run_id/branch_name（attempt 可省略走派生，复用 plan-run-id 与 attempt） | 0.5 |
+| `expected_baseline` | 可整项省略（命令从 publication-journals 派生）；首发即 `{state:"absent", manifest_hash:null, generation:0}` | 8 |
 
 > **场景契约与门禁的对接**（曾经的已知缺口，现已打通）
 >
@@ -497,9 +508,10 @@ finalize 硬性要求证据包顶层 `adversarial_review` 收据，缺失即 `PL
 
 1. 改 `meta/plan-evidence-input.json`（自然输入是唯一可编辑面）。
 2. 重跑 `npx hunter-harness plan evidence-pack --input <input> --output <pack>`：
-   - `context.attempt` 递增（1→2→…）；
-   - `expected_baseline` 置 `present`，带上次发布的 `manifest_hash` 与 `generation`
-     （读 `meta/plan-finalization-transactions/` 最新事务的对应字段）。
+   - `context.attempt` 与 `expected_baseline` 都可省略（推荐）——命令按
+     `plan-events.ndjson` 已发布 attempt 自动递增、从 `meta/publication-journals/`
+     最新 committed journal 派生基线（与 publish 自动记账同一实现），推导值在
+     `derived` 块回显；显式声明的值始终优先。
 3. 再跑 `npx hunter-harness plan finalize --input <pack>`。
 
 新 attempt + 换收据 + 重新派生 `scenario-manifest.json` 与 `implementation-checkpoints.json`

@@ -1,10 +1,11 @@
-import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { emitPlanError, planErrorEnvelope, planStageForCode } from "./plan-error.js";
 import { runPlanEvidencePack } from "./plan-evidence-pack.js";
 import { runPlanFinalize } from "./plan-finalize.js";
 import { runPlanReviewRecord } from "./plan-review-record.js";
+import { deriveBaseline, lastKnownAttempt } from "../plan-evidence/publication-bookkeeping.js";
 import type { CommandDependencies } from "./configure.js";
 
 export interface PlanPublishOptions {
@@ -64,67 +65,7 @@ function captureStdout(dependencies: CommandDependencies): {
   };
 }
 
-/** 从 committed journal 派生上次发布基线（manifest_hash + generation）。 */
-async function deriveBaseline(
-  changeDir: string
-): Promise<{ readonly manifest_hash: string; readonly generation: number } | undefined> {
-  const journalsDir = join(changeDir, "meta", "publication-journals");
-  let files: string[];
-  try {
-    files = await readdir(journalsDir);
-  } catch {
-    return undefined;
-  }
-  let best: { manifest_hash: string; generation: number } | undefined;
-  for (const file of files) {
-    if (!file.endsWith(".json")) continue;
-    try {
-      const journal = JSON.parse(await readFile(join(journalsDir, file), "utf8")) as {
-        state?: unknown;
-        binding?: {
-          new_manifest_hash?: unknown;
-          expected_baseline?: { state?: unknown; generation?: unknown };
-        };
-      };
-      if (journal.state !== "committed" ||
-          typeof journal.binding?.new_manifest_hash !== "string") continue;
-      const baseline = journal.binding.expected_baseline;
-      const generation = baseline?.state === "present" && typeof baseline.generation === "number"
-        ? baseline.generation + 1
-        : 1;
-      if (best === undefined || generation > best.generation) {
-        best = { manifest_hash: journal.binding.new_manifest_hash, generation };
-      }
-    } catch {
-      // 单个 journal 损坏不阻断基线派生
-    }
-  }
-  return best;
-}
-
 /** plan-events.ndjson 里已出现的最大 attempt（用于重发布时自动递增）。 */
-async function lastKnownAttempt(changeDir: string): Promise<number> {
-  let ndjson: string;
-  try {
-    ndjson = await readFile(join(changeDir, "meta", "plan-events.ndjson"), "utf8");
-  } catch {
-    return 0;
-  }
-  let max = 0;
-  for (const line of ndjson.split("\n")) {
-    if (line.trim() === "") continue;
-    try {
-      const event = JSON.parse(line) as { attempt?: unknown };
-      if (typeof event.attempt === "number" && Number.isSafeInteger(event.attempt) &&
-          event.attempt > max) {
-        max = event.attempt;
-      }
-    } catch {
-      // 单行损坏不阻断
-    }
-  }
-  return max;
-}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

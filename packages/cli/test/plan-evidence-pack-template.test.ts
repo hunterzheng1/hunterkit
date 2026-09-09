@@ -356,4 +356,122 @@ describe("hunter-harness plan evidence-pack 自然输入边界", () => {
     expect(paths).toContain("adversarial_review.review_mode");
     expect(paths).toContain("adversarial_review.input_hash");
   });
+
+  it("模板默认省略 attempt/expected_baseline（推荐写法），derived 回显推导值（WI-4b）", async () => {
+    const input = await template();
+    // 模板即推荐写法：四个可推导字段整项省略
+    expect("attempt" in (input.context as Record<string, unknown>)).toBe(false);
+    expect("expected_baseline" in input).toBe(false);
+
+    const { exit, body } = await pack(input);
+    if (exit !== 0) console.error("PACK-OUT:", JSON.stringify(body));
+    expect(exit).toBe(0);
+    const result = body as unknown as {
+      derived?: { attempt?: number; expected_baseline?: { state: string } };
+    };
+    // 无发布历史：attempt 派生 1、baseline 派生 absent
+    expect(result.derived?.attempt).toBe(1);
+    expect(result.derived?.expected_baseline?.state).toBe("absent");
+  });
+
+  it("省略 capabilities 时按 affected_paths 推断并回显（WI-4b）", async () => {
+    const input = await template();
+    const machine = input.machine as Record<string, unknown>;
+    delete machine.capabilities;
+    const structured = input.structured_input as { tasks: { affected_paths: string[] }[] };
+    structured.tasks[0].affected_paths = ["src/api/user_controller.ts"];
+
+    const { exit, body } = await pack(input);
+    if (exit !== 0) console.error("PACK-OUT:", JSON.stringify(body));
+    expect(exit).toBe(0);
+    const result = body as unknown as {
+      derived?: { capabilities?: string[] };
+      capability_provenance?: { capability: string; source: string }[];
+    };
+    expect(result.derived?.capabilities).toContain("api");
+    expect(result.capability_provenance)
+      .toContainEqual({ capability: "api", source: "inferred" });
+  });
+
+  it("capabilities 给非法枚举值时在边界报出字段路径（不再等 core 抛无定位码）", async () => {
+    const input = await template();
+    (input.machine as Record<string, unknown>).capabilities = ["kubernetes"];
+
+    const { exit, body } = await pack(input);
+
+    expect(exit).toBe(1);
+    expect(body.code).toBe("PLAN_EVIDENCE_INPUT_INVALID");
+    expect(body.field_path).toBe("machine.capabilities[0]");
+    expect(body.problems?.[0]?.message).toContain("api");
+  });
+
+  it("context 缺 project_id/run_id/branch_name 时在边界报出（attempt 可省略）", async () => {
+    const input = await template();
+    const context = input.context as Record<string, unknown>;
+    delete context.project_id;
+    delete context.branch_name;
+
+    const { exit, body } = await pack(input);
+
+    expect(exit).toBe(1);
+    expect(body.code).toBe("PLAN_EVIDENCE_INPUT_INVALID");
+    expect(body.field_path).toBe("context");
+    expect(body.problems?.[0]?.missing_keys).toEqual(
+      expect.arrayContaining(["project_id", "branch_name"]));
+    expect(body.problems?.[0]?.missing_keys).not.toContain("attempt");
+  });
+
+  it("expected_baseline 给非法形状时在边界报出字段路径", async () => {
+    const input = await template();
+    input.expected_baseline = { state: "maybe", manifest_hash: null, generation: 0 };
+
+    const { exit, body } = await pack(input);
+
+    expect(exit).toBe(1);
+    expect(body.code).toBe("PLAN_EVIDENCE_INPUT_INVALID");
+    expect(body.field_path).toBe("expected_baseline.state");
+  });
+
+  it("有发布历史时省略 attempt/baseline 派生上次值（与 publish 同一实现）", async () => {
+    const input = await template();
+    // 伪造一份 committed journal + plan-events：上次发布 attempt=2、generation=1
+    const changeDir = join(root, ".harness", "changes", "replace-with-change-name", "meta");
+    await fs.mkdir(join(changeDir, "publication-journals"), { recursive: true });
+    await fs.writeFile(join(changeDir, "publication-journals", "op-1.json"), JSON.stringify({
+      state: "committed",
+      binding: {
+        new_manifest_hash: `sha256:${"c".repeat(64)}`,
+        expected_baseline: { state: "absent", manifest_hash: null, generation: 0 }
+      }
+    }));
+    await fs.writeFile(join(changeDir, "plan-events.ndjson"),
+      `${JSON.stringify({ type: "phase_ended", attempt: 2 })}\n`);
+
+    const { exit, body } = await pack(input);
+    if (exit !== 0) console.error("PACK-OUT:", JSON.stringify(body));
+    expect(exit).toBe(0);
+    const result = body as unknown as {
+      derived?: {
+        attempt?: number;
+        expected_baseline?: { state: string; manifest_hash: string; generation: number };
+      };
+    };
+    expect(result.derived?.attempt).toBe(3);
+    expect(result.derived?.expected_baseline?.state).toBe("present");
+    expect(result.derived?.expected_baseline?.manifest_hash).toBe(`sha256:${"c".repeat(64)}`);
+    expect(result.derived?.expected_baseline?.generation).toBe(1);
+  });
+
+  it("显式声明 attempt/expected_baseline 时尊重原值、不进 derived 回显", async () => {
+    const input = await template();
+    (input.context as Record<string, unknown>).attempt = 5;
+    input.expected_baseline = { state: "absent", manifest_hash: null, generation: 0 };
+
+    const { exit, body } = await pack(input);
+    if (exit !== 0) console.error("PACK-OUT:", JSON.stringify(body));
+    expect(exit).toBe(0);
+    const result = body as unknown as { derived?: Record<string, unknown> };
+    expect(result.derived?.attempt).toBeUndefined();
+    expect(result.derived?.expected_baseline).toBeUndefined();
+  });
 });
